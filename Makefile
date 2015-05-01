@@ -1,26 +1,33 @@
 CC=			gcc
 CFLAGS=		-g -Wall -O2 -Wc++-compat -Wno-unused-function
-DFLAGS=
-LOBJS=		bgzf.o hts.o vcf.o
+CPPFLAGS=
+OBJS=		bgzf.o hts.o vcf.o ucf2bgt.o
 INCLUDES=
-LIBPATH=
+LIBS=		-lpthread -lz
+PROG=		bgt
 
 .SUFFIXES:.c .o
-.PHONY:lib
 
 .c.o:
-		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
+		$(CC) -c $(CFLAGS) $(CPPFLAGS) $(INCLUDES) $< -o $@
 
-libhts.a:$(LOBJS)
-		$(AR) -csru $@ $(LOBJS)
+all:$(PROG)
+
+bgt:$(OBJS) main.o
+		$(CC) $^ -o $@ $(LIBS)
 
 bgzf.o:bgzf.c bgzf.h khash.h
-		$(CC) -c $(CFLAGS) $(DFLAGS) -DBGZF_MT -DBGZF_CACHE $(INCLUDES) $< -o $@
-
-hts.o:hts.c bgzf.h bgzf.h khash.h
-		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
-
-vcf.o:vcf.h bgzf.h kstring.h khash.h hts.h
+		$(CC) -c $(CFLAGS) $(CPPFLAGS) -DBGZF_MT -DBGZF_CACHE $(INCLUDES) $< -o $@
 
 clean:
 		rm -fr gmon.out *.o a.out *.dSYM *~ *.a *.so *.dylib
+
+depend:
+		(LC_ALL=C; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c)
+
+# DO NOT DELETE
+
+bgzf.o: bgzf.h
+hts.o: bgzf.h hts.h kseq.h khash.h ksort.h
+ucf2bgt.o: vcf.h bgzf.h hts.h kstring.h
+vcf.o: kstring.h bgzf.h vcf.h hts.h khash.h kseq.h
