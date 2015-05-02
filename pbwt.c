@@ -55,17 +55,28 @@ static inline int pbw_rlenc1(uint8_t *p, int l, int b)
 	return q - p;
 }
 
-int pbw_rlenc(int m, uint8_t *u)
+int pbw_rlenc(int m, const uint8_t *u, uint8_t *rle)
 {
 	int j, l;
-	uint8_t *p = u;
+	uint8_t *p = rle;
 	for (j = 1, l = 1; j < m; ++j) {
 		if (u[j] == u[j-1]) ++l;
 		else p += pbw_rlenc1(p, l, u[j-1]), l = 1;
 	}
 	p += pbw_rlenc1(p, l, u[m-1]);
 	*p = 0;
-	return p - u;
+	return p - rle;
+}
+
+int pbw_rldec(const uint8_t *rle, uint8_t *u)
+{
+	const uint8_t *p;
+	uint8_t *q = u;
+	for (p = rle; *p; ++p) {
+		int i, l = pbw_tbl[*p>>1], b = *p&1;
+		for (i = 0; i < l; ++i) *q++ = b;
+	}
+	return q - u;
 }
 
 static uint8_t a[2][4] = {{0,1,0,0}, {0,1,1,0}};
