@@ -157,7 +157,7 @@ int main()
 	out = pbc_init(M);
 	for (k = 0; k < N; ++k) {
 		pbc_enc(in, a[k]);
-		pbc_dec(out, in->u); for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
+		pbc_dec(out, in->u); for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\t');
 		pbs_dec(M, R, d, in->u);
 		radix_sort_S(d, d + R);
 		for (j = 0; j < R; ++j) putchar('0' + d[j].b); putchar('\n');
