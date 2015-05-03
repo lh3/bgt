@@ -2,6 +2,10 @@
 #include <string.h>
 #include "pbwt.h"
 
+/********************************
+ * Run-length encoding/decoding *
+ ********************************/
+
 uint32_t pbw_tbl[128];
 
 void pbw_precal_tbl(uint32_t tbl[128])
@@ -11,6 +15,38 @@ void pbw_precal_tbl(uint32_t tbl[128])
 		for (j = 0; j < 16; ++j)
 			tbl[k++] = (uint32_t)j<<i*4;
 }
+
+static inline int pbw_rlenc1(uint8_t *p, int l, int b)
+{
+	uint8_t *q = p;
+	while (l > 16) {
+		int i;
+		for (i = 17; i < 128 && pbw_tbl[i] <= l; ++i);
+		if (l < pbw_tbl[i]) --i;
+		*q++ = i<<1 | b;
+		l -= pbw_tbl[i];
+	}
+	if (l > 0) *q++ = l<<1 | b;
+	return q - p;
+}
+
+// rle can be the same as u. In this case, u is overwritten.
+int pbw_rlenc(int m, const uint8_t *u, uint8_t *rle)
+{
+	int j, l;
+	uint8_t *p = rle;
+	for (j = 1, l = 1; j < m; ++j) {
+		if (u[j] == u[j-1]) ++l;
+		else p += pbw_rlenc1(p, l, u[j-1]), l = 1;
+	}
+	p += pbw_rlenc1(p, l, u[m-1]);
+	*p = 0;
+	return p - rle;
+}
+
+/******************
+ * Positional BWT *
+ ******************/
 
 pbwt_t *pb_init(int m)
 {
@@ -39,44 +75,7 @@ void pb_enc(pbwt_t *pb, const uint8_t *a)
 	p[0] = pb->S_cur, p[1] = p[0] + (pb->m - n1);
 	for (j = 0; j < pb->m; ++j)
 		*p[pb->u[j]]++ = pb->S_pre[j];
-}
-
-static inline int pbw_rlenc1(uint8_t *p, int l, int b)
-{
-	uint8_t *q = p;
-	while (l > 16) {
-		int i;
-		for (i = 17; i < 128 && pbw_tbl[i] <= l; ++i);
-		if (l < pbw_tbl[i]) --i;
-		*q++ = i<<1 | b;
-		l -= pbw_tbl[i];
-	}
-	if (l > 0) *q++ = l<<1 | b;
-	return q - p;
-}
-
-int pbw_rlenc(int m, const uint8_t *u, uint8_t *rle)
-{
-	int j, l;
-	uint8_t *p = rle;
-	for (j = 1, l = 1; j < m; ++j) {
-		if (u[j] == u[j-1]) ++l;
-		else p += pbw_rlenc1(p, l, u[j-1]), l = 1;
-	}
-	p += pbw_rlenc1(p, l, u[m-1]);
-	*p = 0;
-	return p - rle;
-}
-
-int pbw_rldec(const uint8_t *rle, uint8_t *u)
-{
-	const uint8_t *p;
-	uint8_t *q = u;
-	for (p = rle; *p; ++p) {
-		int i, l = pbw_tbl[*p>>1], b = *p&1;
-		for (i = 0; i < l; ++i) *q++ = b;
-	}
-	return q - u;
+	pb->l = pbw_rlenc(pb->m, pb->u, pb->u);
 }
 
 void pb_dec_reset(pbwt_t *pb, const int32_t *S)
@@ -86,18 +85,41 @@ void pb_dec_reset(pbwt_t *pb, const int32_t *S)
 		pb->S_cur[i] = S? S[i] : i;
 }
 
-static uint8_t a[2][4] = {{0,1,0,0}, {0,0,1,1}};
+void pb_dec_all(pbwt_t *pb, const uint8_t *b)
+{
+	const uint8_t *q;
+	int32_t *swap, *p[2], s = 0;
+	int i, l, c, n1;
+	swap = pb->S_pre, pb->S_pre = pb->S_cur, pb->S_cur = swap;
+	for (q = b, n1 = 0; *q; ++q) // count the number of 1 bits
+		if (*q&1) n1 += pbw_tbl[*q>>1];
+	p[0] = pb->S_cur, p[1] = p[0] + (pb->m - n1);
+	for (q = b; *q; ++q) {
+		l = pbw_tbl[*q>>1], c = *q&1;
+		for (i = 0; i < l; ++i) {
+			int32_t S = pb->S_pre[s + i];
+			pb->u[S] = c, *p[c]++ = S;
+		}
+		s += l;
+	}
+}
+
+const int N = 4, M = 4;
+static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}};
 
 int main()
 {
-	pbwt_t *pb;
+	pbwt_t *in, *out;
 	int k, j;
-	pb = pb_init(4);
-	for (k = 0; k < 2; ++k) {
-		pb_enc(pb, a[k]);
-		for (j = 0; j < pb->m; ++j) putchar('0'+pb->u[j]);
-		for (j = 0; j < pb->m; ++j) printf("\t%d", pb->S_cur[j]); putchar('\n');
+	in = pb_init(M);
+	out = pb_init(M);
+	for (k = 0; k < N; ++k) {
+		pb_enc(in, a[k]);
+		pb_dec_all(out, in->u);
+		for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
+//		for (j = 0; j < pb->m; ++j) putchar('0'+in->u[j]);
+//		for (j = 0; j < pb->m; ++j) printf("\t%d", in->S_cur[j]); putchar('\n');
 	}
-	free(pb);
+	free(in); free(out);
 	return 0;
 }

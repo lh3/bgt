@@ -7,7 +7,7 @@
 typedef struct {
 	int32_t *S_pre, *S_cur;
 	uint8_t *u;
-	int32_t m, dummy;
+	int32_t m, l;
 } pbwt_t;
 
 pbwt_t *pb_init(int m);
