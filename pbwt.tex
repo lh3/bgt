@@ -28,10 +28,10 @@ An important use of $(B_k)_k$ is to compute $S_k$. Define
 \end{equation}
 where $C_k(b)$ gives the number of symbols in $B_k$ that are lexicographically
 smaller than $b$ and ${\rm rank}_k(b,i)$ the number of $b$ symbols in $B_k$
-before position $i$. Without proof here, we state that $\phi_k$ is also a
-bijection on $\{0,\ldots,m-1\}$ and
+before position $i$. The $i$-th smallest column in row $k-1$ is ranked
+$\phi_k(i)$ in row $k$. Thus
 \begin{equation}\label{eq:trans}
-S_k(i)=\phi_k(S_{k-1}(i))
+S_k(\phi_k(i))=S_{k-1}(i)
 \end{equation}
 This property gives us an $O(nm)$ algorithm to compute $(S_k)_k$ and $(B_k)_k$
 for an input matrix $(A_k)_k$.

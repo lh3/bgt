@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 typedef struct {
-	int32_t *S0, *S1;
+	int32_t *S_pre, *S_cur;
 	uint8_t *u;
 	int32_t m, dummy;
 } pbwt_t;

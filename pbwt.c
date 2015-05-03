@@ -20,25 +20,25 @@ pbwt_t *pb_init(int m)
 	if (pbw_tbl[1] == 0) pbw_precal_tbl(pbw_tbl);
 	p = (uint8_t*)calloc(sizeof(pbwt_t) + 2 * m * 4 + (m + 1), 1);
 	pb = (pbwt_t*)p; p += sizeof(pbwt_t);
-	pb->S0 = (int32_t*)p; p += m * 4;
-	pb->S1 = (int32_t*)p; p += m * 4;
+	pb->S_pre = (int32_t*)p; p += m * 4;
+	pb->S_cur = (int32_t*)p; p += m * 4;
 	pb->u = p; p += m + 1;
 	pb->m = m;
-	for (j = 0; j < pb->m; ++j) pb->S0[j] = pb->S1[j] = j;
+	for (j = 0; j < pb->m; ++j) pb->S_pre[j] = pb->S_cur[j] = j;
 	return pb;
 }
 
-// before pb_enc(a_k) is called, S1 = S_{k-1}
-// after the call, u = B_k, S0 = S_{k-1} and S1 = S_k
+// before pb_enc(a_k) is called, S_cur = S_{k-1}
+// after the call, u = B_k, S_pre = S_{k-1} and S_cur = S_k
 void pb_enc(pbwt_t *pb, const uint8_t *a)
 {
 	int32_t *p[2], j, n1, *swap;
-	swap = pb->S0, pb->S0 = pb->S1, pb->S1 = swap;
+	swap = pb->S_pre, pb->S_pre = pb->S_cur, pb->S_cur = swap;
 	for (j = n1 = 0; j < pb->m; ++j)
-		n1 += (pb->u[j] = !!a[pb->S0[j]]);
-	p[0] = pb->S1, p[1] = p[0] + (pb->m - n1);
+		n1 += (pb->u[j] = !!a[pb->S_pre[j]]);
+	p[0] = pb->S_cur, p[1] = p[0] + (pb->m - n1);
 	for (j = 0; j < pb->m; ++j)
-		*p[pb->u[j]]++ = pb->S0[j];
+		*p[pb->u[j]]++ = pb->S_pre[j];
 }
 
 static inline int pbw_rlenc1(uint8_t *p, int l, int b)
@@ -79,17 +79,25 @@ int pbw_rldec(const uint8_t *rle, uint8_t *u)
 	return q - u;
 }
 
-static uint8_t a[2][4] = {{0,1,0,0}, {0,1,1,0}};
+void pb_dec_reset(pbwt_t *pb, const int32_t *S)
+{
+	int i;
+	for (i = 0; i < pb->m; ++i)
+		pb->S_cur[i] = S? S[i] : i;
+}
+
+static uint8_t a[2][4] = {{0,1,0,0}, {0,0,1,1}};
 
 int main()
 {
 	pbwt_t *pb;
-	int j;
+	int k, j;
 	pb = pb_init(4);
-	pb_enc(pb, a[0]);
-	pb_enc(pb, a[1]);
-	for (j = 0; j < pb->m; ++j) putchar('0'+pb->u[j]);
-	for (j = 0; j < pb->m; ++j) printf("\t%d", pb->S1[j]); putchar('\n');
+	for (k = 0; k < 2; ++k) {
+		pb_enc(pb, a[k]);
+		for (j = 0; j < pb->m; ++j) putchar('0'+pb->u[j]);
+		for (j = 0; j < pb->m; ++j) printf("\t%d", pb->S_cur[j]); putchar('\n');
+	}
 	free(pb);
 	return 0;
 }
