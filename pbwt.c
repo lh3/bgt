@@ -18,16 +18,17 @@ void pbw_precal_tbl(uint32_t tbl[128])
 
 static inline int pbw_rlenc1(uint8_t *p, int l, int b)
 {
-	uint8_t *q = p;
-	while (l > 16) {
-		int i;
-		for (i = 17; i < 128 && pbw_tbl[i] <= l; ++i);
-		if (l < pbw_tbl[i]) --i;
-		*q++ = i<<1 | b;
-		l -= pbw_tbl[i];
+	if (l >= 16) {
+		uint8_t *q = p;
+		uint32_t x, i;
+		for (x = 0xfU<<28, i = 7<<2; x; x >>= 4, i -= 1<<2)
+			if (x&l) *q++ = (i<<2 | (x&l)>>i) << 1 | b;
+		*q = 0;
+		return q - p;
+	} else {
+		*p = l<<1 | b; p[1] = 0;
+		return 1;
 	}
-	if (l > 0) *q++ = l<<1 | b;
-	return q - p;
 }
 
 // rle can be the same as u. In this case, u is overwritten.
@@ -104,8 +105,8 @@ void pb_dec_all(pbwt_t *pb, const uint8_t *b)
 	}
 }
 
-const int N = 4, M = 4;
-static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}};
+const int N = 5, M = 4;
+static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}};
 
 int main()
 {
@@ -113,6 +114,11 @@ int main()
 	int k, j;
 	in = pb_init(M);
 	out = pb_init(M);
+	for (j = 0; j < 8; ++j) {
+		for (k = 0; k < 16; ++k)
+			printf("%8x,", pbw_tbl[j*16+k]);
+		putchar('\n');
+	}
 	for (k = 0; k < N; ++k) {
 		pb_enc(in, a[k]);
 		pb_dec_all(out, in->u);
