@@ -80,79 +80,20 @@ void pbf_dec(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_t *a)
 	}
 }
 
-/******************
- *** Radix sort ***
- ******************/
-
-#define rstype_t pbs_dat_t
-#define rskey(x) ((x).r)
-
-#define RS_MIN_SIZE 64
-
-typedef struct {
-	rstype_t *b, *e;
-} rsbucket_t;
-
-void rs_insertsort(rstype_t *beg, rstype_t *end) // insertion sort
-{
-	rstype_t *i;
-	for (i = beg + 1; i < end; ++i)
-		if (rskey(*i) < rskey(*(i - 1))) {
-			rstype_t *j, tmp = *i;
-			for (j = i; j > beg && rskey(tmp) < rskey(*(j-1)); --j)
-				*j = *(j - 1);
-			*j = tmp;
-		}
-}
-// sort between [$beg, $end); take radix from ">>$s&((1<<$n_bits)-1)"
-void rs_sort(rstype_t *beg, rstype_t *end, int n_bits, int s)
-{
-	rstype_t *i;
-	int size = 1<<n_bits, m = size - 1;
-	rsbucket_t *k, b[size], *be = b + size; // b[] keeps all the buckets
-
-	for (k = b; k != be; ++k) k->b = k->e = beg;
-	for (i = beg; i != end; ++i) ++b[rskey(*i)>>s&m].e; // count radix
-	for (k = b + 1; k != be; ++k) // set start and end of each bucket
-		k->e += (k-1)->e - beg, k->b = (k-1)->e;
-	for (k = b; k != be;) { // in-place classification based on radix
-		if (k->b != k->e) { // the bucket is not full
-			rsbucket_t *l;
-			if ((l = b + (rskey(*k->b)>>s&m)) != k) { // different bucket
-				rstype_t tmp = *k->b, swap;
-				do { // swap until we find an element in bucket $k
-					swap = tmp; tmp = *l->b; *l->b++ = swap;
-					l = b + (rskey(tmp)>>s&m);
-				} while (l != k);
-				*k->b++ = tmp; // push the found element to $k
-			} else ++k->b; // move to the next element in the bucket
-		} else ++k; // move to the next bucket
-	}
-	for (b->b = beg, k = b + 1; k != be; ++k) k->b = (k-1)->e; // reset k->b
-	if (s) { // if $s is non-zero, we need to sort buckets
-		s = s > n_bits? s - n_bits : 0;
-		for (k = b; k != be; ++k)
-			if (k->e - k->b > RS_MIN_SIZE) rs_sort(k->b, k->e, n_bits, s);
-			else if (k->e - k->b > 1) rs_insertsort(k->b, k->e);
-	}
-}
-
-void radix_sort(rstype_t *beg, rstype_t *end)
-{
-	if (end - beg <= RS_MIN_SIZE) rs_insertsort(beg, end);
-	else rs_sort(beg, end, 8, sizeof(rskey(*beg)) * 8 - 8);
-}
-
 /**********************************
  * Basic routine to decode subset *
  **********************************/
+
+#include "ksort.h"
+#define pbs_key_r(x) ((x).r)
+KRADIX_SORT_INIT(r, pbs_dat_t, pbs_key_r, 4)
 
 void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
 {
 	const uint8_t *q;
 	pbs_dat_t *p = d, *end = d + r;
 	int n1, c[2], acc[2];
-	radix_sort(d, d + r); // sort by rank
+	radix_sort_r(d, d + r); // sort by rank
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
 	acc[0] = 0, acc[1] = m - n1; // accumulative counts
@@ -204,8 +145,11 @@ void pbc_f_dec(pbc_f_t *pb, const uint8_t *b)
 }
 
 
-const int N = 6, M = 4, R = 2;
-static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}, {1,0,1,0}};
+const int N = 7, M = 4, R = 2;
+static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}, {1,0,1,0}, {0,1,1,1}};
+
+#define pbs_key_S(x) ((x).S)
+KRADIX_SORT_INIT(S, pbs_dat_t, pbs_key_S, 4)
 
 int main()
 {
@@ -220,7 +164,8 @@ int main()
 		pbc_f_enc(in, a[k]);
 		pbc_f_dec(out, in->u); for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
 		pbs_dec(M, R, d, in->u);
-		for (j = 0; j < R; ++j) printf("%d,%d;", d[j].S, d[j].b); putchar('\n');
+		radix_sort_S(d, d + R);
+		for (j = 0; j < R; ++j) putchar('0' + d[j].b); putchar('\n');
 	}
 	free(in); free(out);
 	return 0;
