@@ -46,9 +46,9 @@ static int pbr_enc(int m, const uint8_t *u, uint8_t *rle)
 	return p - rle;
 }
 
-/************************
- * Basic codec routines *
- ************************/
+/****************************************
+ * Basic codec routines for full matrix *
+ ****************************************/
 
 // u MUST be at least m+1 long
 int pbf_enc(int m, const int32_t *S0, const uint8_t *a, int32_t *S, uint8_t *u)
@@ -85,7 +85,7 @@ void pbf_dec(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_t *a)
  ******************/
 
 #define rstype_t pbs_dat_t
-#define rskey(x) ((x).i)
+#define rskey(x) ((x).r)
 
 #define RS_MIN_SIZE 64
 
@@ -143,23 +143,28 @@ void radix_sort(rstype_t *beg, rstype_t *end)
 	else rs_sort(beg, end, 8, sizeof(rskey(*beg)) * 8 - 8);
 }
 
+/**********************************
+ * Basic routine to decode subset *
+ **********************************/
+
 void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
 {
 	const uint8_t *q;
-	int n1, j, c[2], acc[2];
-	radix_sort(d, d + r);
+	pbs_dat_t *p = d, *end = d + r;
+	int n1, c[2], acc[2];
+	radix_sort(d, d + r); // sort by rank
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
 	acc[0] = 0, acc[1] = m - n1; // accumulative counts
 	c[0] = c[1] = 0; // running marginal counts
-	for (q = u, j = 0; *q; ++q) {
+	for (q = u; p != end && *q; ++q) {
 		int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
-		if (s <= d[j].i && d[j].i < s + l) {
+		if (s <= p->r && p->r < s + l) {
 			do {
-				d[j].b = b;
-				d[j].i = acc[b] + c[b] + (d[j].i - s);
-				++j;
-			} while (j < r && s <= d[j].i && d[j].i < s + l);
+				p->r = acc[b] + c[b] + (p->r - s);
+				p->b = b;
+				++p;
+			} while (p != end && s <= p->r && p->r < s + l);
 		}
 		c[b] += l;
 	}
@@ -199,19 +204,23 @@ void pbc_f_dec(pbc_f_t *pb, const uint8_t *b)
 }
 
 
-const int N = 6, M = 4;
+const int N = 6, M = 4, R = 2;
 static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}, {1,0,1,0}};
 
 int main()
 {
 	pbc_f_t *in, *out;
+	pbs_dat_t d[R];
 	int k, j;
+	d[0].r = 1, d[0].S = 1;
+	d[1].r = 2, d[1].S = 2;
 	in = pbc_f_init(M);
 	out = pbc_f_init(M);
 	for (k = 0; k < N; ++k) {
 		pbc_f_enc(in, a[k]);
-		pbc_f_dec(out, in->u);
-		for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
+		pbc_f_dec(out, in->u); for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
+		pbs_dec(M, R, d, in->u);
+		for (j = 0; j < R; ++j) printf("%d,%d;", d[j].S, d[j].b); putchar('\n');
 	}
 	free(in); free(out);
 	return 0;
