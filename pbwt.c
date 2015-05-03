@@ -46,12 +46,12 @@ static int pbr_enc(int m, const uint8_t *u, uint8_t *rle)
 	return p - rle;
 }
 
-/****************************************
- * Basic codec routines for full matrix *
- ****************************************/
+/*****************************
+ * Encode/decode all columns *
+ *****************************/
 
 // u MUST be at least m+1 long
-int pbf_enc(int m, const int32_t *S0, const uint8_t *a, int32_t *S, uint8_t *u)
+int pbc_enc_core(int m, const int32_t *S0, const uint8_t *a, int32_t *S, uint8_t *u)
 {
 	int32_t *p[2], j, n1;
 	for (j = n1 = 0; j < m; ++j)
@@ -63,7 +63,7 @@ int pbf_enc(int m, const int32_t *S0, const uint8_t *a, int32_t *S, uint8_t *u)
 }
 
 // u MUST be null terminated
-void pbf_dec(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_t *a)
+void pbc_dec_core(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_t *a)
 {
 	const uint8_t *q;
 	int32_t *p[2], n1, s;
@@ -80,9 +80,38 @@ void pbf_dec(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_t *a)
 	}
 }
 
-/**********************************
- * Basic routine to decode subset *
- **********************************/
+pbc_t *pbc_init(int m)
+{
+	int j;
+	uint8_t *p;
+	pbc_t *pb;
+	p = (uint8_t*)calloc(sizeof(pbc_t) + 2 * m * 4 + (m + 1), 1);
+	pb = (pbc_t*)p; p += sizeof(pbc_t);
+	pb->S0 = (int32_t*)p; p += m * 4;
+	pb->S  = (int32_t*)p; p += m * 4;
+	pb->u = p; p += m + 1;
+	pb->m = m;
+	for (j = 0; j < pb->m; ++j) pb->S[j] = j;
+	return pb;
+}
+
+void pbc_enc(pbc_t *pb, const uint8_t *a)
+{
+	int32_t *swap;
+	swap = pb->S, pb->S = pb->S0, pb->S0 = swap;
+	pb->l = pbc_enc_core(pb->m, pb->S0, a, pb->S, pb->u);
+}
+
+void pbc_dec(pbc_t *pb, const uint8_t *b)
+{
+	int32_t *swap;
+	swap = pb->S, pb->S = pb->S0, pb->S0 = swap;
+	pbc_dec_core(pb->m, pb->S0, b, pb->S, pb->u);
+}
+
+/******************************
+ * Decode a subset of columns *
+ ******************************/
 
 #include "ksort.h"
 #define pbs_key_r(x) ((x).r)
@@ -111,40 +140,6 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
 	}
 }
 
-/*****************************
- * More convenient interface *
- *****************************/
-
-pbc_f_t *pbc_f_init(int m)
-{
-	int j;
-	uint8_t *p;
-	pbc_f_t *pb;
-	p = (uint8_t*)calloc(sizeof(pbc_f_t) + 2 * m * 4 + (m + 1), 1);
-	pb = (pbc_f_t*)p; p += sizeof(pbc_f_t);
-	pb->S0 = (int32_t*)p; p += m * 4;
-	pb->S  = (int32_t*)p; p += m * 4;
-	pb->u = p; p += m + 1;
-	pb->m = m;
-	for (j = 0; j < pb->m; ++j) pb->S[j] = j;
-	return pb;
-}
-
-void pbc_f_enc(pbc_f_t *pb, const uint8_t *a)
-{
-	int32_t *swap;
-	swap = pb->S, pb->S = pb->S0, pb->S0 = swap;
-	pb->l = pbf_enc(pb->m, pb->S0, a, pb->S, pb->u);
-}
-
-void pbc_f_dec(pbc_f_t *pb, const uint8_t *b)
-{
-	int32_t *swap;
-	swap = pb->S, pb->S = pb->S0, pb->S0 = swap;
-	pbf_dec(pb->m, pb->S0, b, pb->S, pb->u);
-}
-
-
 const int N = 7, M = 4, R = 2;
 static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}, {1,0,1,0}, {0,1,1,1}};
 
@@ -153,16 +148,16 @@ KRADIX_SORT_INIT(S, pbs_dat_t, pbs_key_S, 4)
 
 int main()
 {
-	pbc_f_t *in, *out;
+	pbc_t *in, *out;
 	pbs_dat_t d[R];
 	int k, j;
 	d[0].r = 1, d[0].S = 1;
 	d[1].r = 2, d[1].S = 2;
-	in = pbc_f_init(M);
-	out = pbc_f_init(M);
+	in = pbc_init(M);
+	out = pbc_init(M);
 	for (k = 0; k < N; ++k) {
-		pbc_f_enc(in, a[k]);
-		pbc_f_dec(out, in->u); for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
+		pbc_enc(in, a[k]);
+		pbc_dec(out, in->u); for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
 		pbs_dec(M, R, d, in->u);
 		radix_sort_S(d, d + R);
 		for (j = 0; j < R; ++j) putchar('0' + d[j].b); putchar('\n');
