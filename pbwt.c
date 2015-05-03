@@ -1,130 +1,132 @@
+#include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
+#include <stdio.h>
 #include "pbwt.h"
 
 /********************************
  * Run-length encoding/decoding *
  ********************************/
 
-uint32_t pbw_tbl[128];
+uint32_t pbr_tbl[128] = {
+	0x0U,       0x1U,       0x2U,       0x3U,       0x4U,       0x5U,       0x6U,       0x7U,       0x8U,       0x9U,       0xaU,       0xbU,       0xcU,       0xdU,       0xeU,       0xfU,       
+	0x0U,      0x10U,      0x20U,      0x30U,      0x40U,      0x50U,      0x60U,      0x70U,      0x80U,      0x90U,      0xa0U,      0xb0U,      0xc0U,      0xd0U,      0xe0U,      0xf0U,      
+	0x0U,     0x100U,     0x200U,     0x300U,     0x400U,     0x500U,     0x600U,     0x700U,     0x800U,     0x900U,     0xa00U,     0xb00U,     0xc00U,     0xd00U,     0xe00U,     0xf00U,     
+	0x0U,    0x1000U,    0x2000U,    0x3000U,    0x4000U,    0x5000U,    0x6000U,    0x7000U,    0x8000U,    0x9000U,    0xa000U,    0xb000U,    0xc000U,    0xd000U,    0xe000U,    0xf000U,    
+	0x0U,   0x10000U,   0x20000U,   0x30000U,   0x40000U,   0x50000U,   0x60000U,   0x70000U,   0x80000U,   0x90000U,   0xa0000U,   0xb0000U,   0xc0000U,   0xd0000U,   0xe0000U,   0xf0000U,   
+	0x0U,  0x100000U,  0x200000U,  0x300000U,  0x400000U,  0x500000U,  0x600000U,  0x700000U,  0x800000U,  0x900000U,  0xa00000U,  0xb00000U,  0xc00000U,  0xd00000U,  0xe00000U,  0xf00000U,  
+	0x0U, 0x1000000U, 0x2000000U, 0x3000000U, 0x4000000U, 0x5000000U, 0x6000000U, 0x7000000U, 0x8000000U, 0x9000000U, 0xa000000U, 0xb000000U, 0xc000000U, 0xd000000U, 0xe000000U, 0xf000000U, 
+	0x0U,0x10000000U,0x20000000U,0x30000000U,0x40000000U,0x50000000U,0x60000000U,0x70000000U,0x80000000U,0x90000000U,0xa0000000U,0xb0000000U,0xc0000000U,0xd0000000U,0xe0000000U,0xf0000000U
+};
 
-void pbw_precal_tbl(uint32_t tbl[128])
-{
-	int i, j, k;
-	for (i = k = 0; i < 8; ++i)
-		for (j = 0; j < 16; ++j)
-			tbl[k++] = (uint32_t)j<<i*4;
-}
-
-static inline int pbw_rlenc1(uint8_t *p, int l, int b)
+static inline int pbr_enc1(uint8_t *p, int l, int b)
 {
 	if (l >= 16) {
 		uint8_t *q = p;
 		uint32_t x, i;
 		for (x = 0xfU<<28, i = 7<<2; x; x >>= 4, i -= 1<<2)
 			if (x&l) *q++ = (i<<2 | (x&l)>>i) << 1 | b;
-		*q = 0;
 		return q - p;
 	} else {
-		*p = l<<1 | b; p[1] = 0;
+		*p = l<<1 | b;
 		return 1;
 	}
 }
 
 // rle can be the same as u. In this case, u is overwritten.
-int pbw_rlenc(int m, const uint8_t *u, uint8_t *rle)
+static int pbr_enc(int m, const uint8_t *u, uint8_t *rle)
 {
 	int j, l;
-	uint8_t *p = rle;
-	for (j = 1, l = 1; j < m; ++j) {
-		if (u[j] == u[j-1]) ++l;
-		else p += pbw_rlenc1(p, l, u[j-1]), l = 1;
+	uint8_t *p = rle, last;
+	for (j = 1, l = 1, last = u[j-1]; j < m; ++j) {
+		if (u[j] == last) ++l;
+		else p += pbr_enc1(p, l, last), l = 1, last = u[j];
 	}
-	p += pbw_rlenc1(p, l, u[m-1]);
+	p += pbr_enc1(p, l, last);
 	*p = 0;
 	return p - rle;
 }
 
-/******************
- * Positional BWT *
- ******************/
+/************************
+ * Basic codec routines *
+ ************************/
 
-pbwt_t *pb_init(int m)
+// u MUST be at least m+1 long
+int pbb_enc(int m, const int32_t *S0, const uint8_t *a, int32_t *S, uint8_t *u)
 {
-	int j;
-	uint8_t *p;
-	pbwt_t *pb;
-	if (pbw_tbl[1] == 0) pbw_precal_tbl(pbw_tbl);
-	p = (uint8_t*)calloc(sizeof(pbwt_t) + 2 * m * 4 + (m + 1), 1);
-	pb = (pbwt_t*)p; p += sizeof(pbwt_t);
-	pb->S_pre = (int32_t*)p; p += m * 4;
-	pb->S_cur = (int32_t*)p; p += m * 4;
-	pb->u = p; p += m + 1;
-	pb->m = m;
-	for (j = 0; j < pb->m; ++j) pb->S_pre[j] = pb->S_cur[j] = j;
-	return pb;
+	int32_t *p[2], j, n1;
+	for (j = n1 = 0; j < m; ++j)
+		n1 += (u[j] = !!a[S0[j]]);
+	p[0] = S, p[1] = p[0] + (m - n1);
+	for (j = 0; j < m; ++j)
+		*p[u[j]]++ = S0[j];
+	return pbr_enc(m, u, u);
 }
 
-// before pb_enc(a_k) is called, S_cur = S_{k-1}
-// after the call, u = B_k, S_pre = S_{k-1} and S_cur = S_k
-void pb_enc(pbwt_t *pb, const uint8_t *a)
-{
-	int32_t *p[2], j, n1, *swap;
-	swap = pb->S_pre, pb->S_pre = pb->S_cur, pb->S_cur = swap;
-	for (j = n1 = 0; j < pb->m; ++j)
-		n1 += (pb->u[j] = !!a[pb->S_pre[j]]);
-	p[0] = pb->S_cur, p[1] = p[0] + (pb->m - n1);
-	for (j = 0; j < pb->m; ++j)
-		*p[pb->u[j]]++ = pb->S_pre[j];
-	pb->l = pbw_rlenc(pb->m, pb->u, pb->u);
-}
-
-void pb_dec_reset(pbwt_t *pb, const int32_t *S)
-{
-	int i;
-	for (i = 0; i < pb->m; ++i)
-		pb->S_cur[i] = S? S[i] : i;
-}
-
-void pb_dec_all(pbwt_t *pb, const uint8_t *b)
+// u MUST be null terminated
+void pbb_dec_full(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_t *a)
 {
 	const uint8_t *q;
-	int32_t *swap, *p[2], s = 0;
-	int i, l, c, n1;
-	swap = pb->S_pre, pb->S_pre = pb->S_cur, pb->S_cur = swap;
-	for (q = b, n1 = 0; *q; ++q) // count the number of 1 bits
-		if (*q&1) n1 += pbw_tbl[*q>>1];
-	p[0] = pb->S_cur, p[1] = p[0] + (pb->m - n1);
-	for (q = b; *q; ++q) {
-		l = pbw_tbl[*q>>1], c = *q&1;
+	int32_t *p[2], n1, s;
+	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
+		if (*q&1) n1 += pbr_tbl[*q>>1];
+	p[0] = S, p[1] = p[0] + (m - n1);
+	for (q = u, s = 0; *q; ++q) {
+		int i, l = pbr_tbl[*q>>1], b = *q&1;
 		for (i = 0; i < l; ++i) {
-			int32_t S = pb->S_pre[s + i];
-			pb->u[S] = c, *p[c]++ = S;
+			int32_t x = S0[s + i];
+			a[x] = b, *p[b]++ = x;
 		}
 		s += l;
 	}
 }
+
+/*****************************
+ * More convenient interface *
+ *****************************/
+
+pbc_f_t *pbc_f_init(int m)
+{
+	int j;
+	uint8_t *p;
+	pbc_f_t *pb;
+	p = (uint8_t*)calloc(sizeof(pbc_f_t) + 2 * m * 4 + (m + 1), 1);
+	pb = (pbc_f_t*)p; p += sizeof(pbc_f_t);
+	pb->S0 = (int32_t*)p; p += m * 4;
+	pb->S  = (int32_t*)p; p += m * 4;
+	pb->u = p; p += m + 1;
+	pb->m = m;
+	for (j = 0; j < pb->m; ++j) pb->S[j] = j;
+	return pb;
+}
+
+void pbc_f_enc(pbc_f_t *pb, const uint8_t *a)
+{
+	int32_t *swap;
+	swap = pb->S, pb->S = pb->S0, pb->S0 = swap;
+	pb->l = pbb_enc(pb->m, pb->S0, a, pb->S, pb->u);
+}
+
+void pbc_f_dec(pbc_f_t *pb, const uint8_t *b)
+{
+	int32_t *swap;
+	swap = pb->S, pb->S = pb->S0, pb->S0 = swap;
+	pbb_dec_full(pb->m, pb->S0, b, pb->S, pb->u);
+}
+
 
 const int N = 5, M = 4;
 static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}};
 
 int main()
 {
-	pbwt_t *in, *out;
+	pbc_f_t *in, *out;
 	int k, j;
-	in = pb_init(M);
-	out = pb_init(M);
-	for (j = 0; j < 8; ++j) {
-		for (k = 0; k < 16; ++k)
-			printf("%8x,", pbw_tbl[j*16+k]);
-		putchar('\n');
-	}
+	in = pbc_f_init(M);
+	out = pbc_f_init(M);
 	for (k = 0; k < N; ++k) {
-		pb_enc(in, a[k]);
-		pb_dec_all(out, in->u);
+		pbc_f_enc(in, a[k]);
+		pbc_f_dec(out, in->u);
 		for (j = 0; j < out->m; ++j) putchar('0' + out->u[j]); putchar('\n');
-//		for (j = 0; j < pb->m; ++j) putchar('0'+in->u[j]);
-//		for (j = 0; j < pb->m; ++j) printf("\t%d", in->S_cur[j]); putchar('\n');
 	}
 	free(in); free(out);
 	return 0;
