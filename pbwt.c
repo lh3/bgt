@@ -229,7 +229,7 @@ int pbf_close(pbf_t *pb)
 	return 0;
 }
 
-int pbf_write(pbf_t *pb, uint8_t **a)
+int pbf_write(pbf_t *pb, uint8_t *const*a)
 {
 	int g;
 	if (!pb->is_writing) return -1;
