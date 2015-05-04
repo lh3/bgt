@@ -145,7 +145,7 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
  * Writing file *
  ****************/
 
-pbf_t *pbf_wopen(const char *fn, int m, int g, int shift)
+pbf_t *pbf_open_w(const char *fn, int m, int g, int shift)
 {
 	FILE *fp;
 	pbf_t *pb;
@@ -167,7 +167,7 @@ pbf_t *pbf_wopen(const char *fn, int m, int g, int shift)
 	return pb;
 }
 
-pbf_t *pbf_ropen(const char *fn)
+pbf_t *pbf_open_r(const char *fn)
 {
 	pbf_t *pb;
 	FILE *fp;
@@ -322,7 +322,7 @@ int main()
 	free(in); free(out);
 
 	pbf_t *pb;
-	pb = pbf_wopen("ttt.pbf", M, 1, 2);
+	pb = pbf_open_w("ttt.pbf", M, 1, 2);
 	for (k = 0; k < N; ++k) {
 		uint8_t *p = &a[k][0];
 		pbf_write(pb, &p);
@@ -330,7 +330,7 @@ int main()
 	pbf_close(pb);
 
 	const uint8_t **b;
-	pb = pbf_ropen("ttt.pbf");
+	pb = pbf_open_r("ttt.pbf");
 	pbf_seek(pb, 6);
 	fprintf(stderr, "out:\n");
 	while ((b = pbf_read(pb)) != 0) {
