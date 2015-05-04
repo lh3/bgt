@@ -140,7 +140,158 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
 	}
 }
 
-const int N = 7, M = 4, R = 2;
+/****************
+ * Writing file *
+ ****************/
+
+pbf_t *pbf_wopen(const char *fn, int m, int g, int shift)
+{
+	FILE *fp;
+	pbf_t *pb;
+	int32_t i, v[3];
+	if (fn && strcmp(fn, "-") != 0) {
+		if ((fp = fopen(fn, "wb")) == NULL)
+			return 0;
+	} else fp = stdin;
+	pb = (pbf_t*)calloc(1, sizeof(pbf_t));
+	pb->fp = fp;
+	pb->m = m, pb->g = g, pb->shift = shift;
+	pb->pb = (pbc_t**)calloc(g, sizeof(void*));
+	for (i = 0; i < g; ++i)
+		pb->pb[i] = pbc_init(m);
+	v[0] = pb->m, v[1] = pb->g, v[2] = pb->shift;
+	fwrite("PBF\1", 1, 4, fp);
+	fwrite(v, 4, 3, fp);
+	pb->is_writing = 1;
+	return pb;
+}
+
+pbf_t *pbf_ropen(const char *fn)
+{
+	pbf_t *pb;
+	FILE *fp;
+	int32_t i, v[3];
+	char magic[4];
+	if (fn && strcmp(fn, "-") != 0) {
+		if ((fp = fopen(fn, "rb")) == 0)
+			return 0;
+	} else fp = stdin;
+	fread(magic, 1, 4, fp);
+	if (strncmp(magic, "PBF\1", 4) != 0) {
+		fclose(fp);
+		return 0;
+	}
+	pb = (pbf_t*)calloc(1, sizeof(pbf_t));
+	fread(v, 4, 3, fp);
+	pb->m = v[0], pb->g = v[1], pb->shift = v[2];
+	pb->pb = (pbc_t**)calloc(pb->g, sizeof(void*));
+	for (i = 0; i < pb->g; ++i)
+		pb->pb[i] = pbc_init(pb->m);
+	pb->buf = (uint8_t*)calloc(pb->m + 1, 1);
+	pb->ret = (const uint8_t**)calloc(pb->g, sizeof(uint8_t*));
+	for (i = 0; i < pb->g; ++i) pb->ret[i] = pb->pb[i]->u;
+	if (fseek(fp, -8, SEEK_END) >= 0) {
+		uint64_t off;
+		uint8_t t;
+		fread(&off, 8, 1, fp);
+		fseek(fp, off, SEEK_SET);
+		fread(&t, 1, 1, fp);
+		fread(&pb->n, 8, 1, fp);
+		fread(&pb->n_idx, 4, 1, fp);
+		pb->m_idx = pb->n_idx;
+		pb->idx = (uint64_t*)calloc(pb->n_idx, 8);
+		fread(pb->idx, 8, pb->n_idx, fp);
+		fseek(fp, 16, SEEK_SET);
+	}
+	pb->fp = fp;
+	return pb;
+}
+
+int pbf_close(pbf_t *pb)
+{
+	int g;
+	if (pb == 0) return 0;
+	if (pb->is_writing) { // write the index
+		uint64_t off;
+		off = ftell(pb->fp);
+		fputc('I', pb->fp);
+		fwrite(&pb->n, 8, 1, pb->fp);
+		fwrite(&pb->n_idx, 4, 1, pb->fp);
+		fwrite(pb->idx, 8, pb->n_idx, pb->fp);
+		fwrite(&off, 8, 1, pb->fp);
+	}
+	free(pb->ret); free(pb->buf);
+	for (g = 0; g < pb->g; ++g) free(pb->pb[g]);
+	free(pb->pb);
+	free(pb->idx);
+	fclose(pb->fp);
+	return 0;
+}
+
+int pbf_write(pbf_t *pb, uint8_t **a)
+{
+	int g;
+	if (!pb->is_writing) return -1;
+	if ((pb->n & ((1ULL<<pb->shift) - 1)) == 0) {
+		if (pb->n_idx == pb->m_idx) {
+			pb->m_idx = pb->m_idx? pb->m_idx<<1 : 8;
+			pb->idx = (uint64_t*)realloc(pb->idx, pb->m_idx * 8);
+		}
+		pb->idx[pb->n_idx++] = ftell(pb->fp); // save the index offset
+		fputc('S', pb->fp);
+		for (g = 0; g < pb->g; ++g) // write S[]
+			fwrite(pb->pb[g]->S, 4, pb->m, pb->fp);
+	}
+	fputc('B', pb->fp);
+	for (g = 0; g < pb->g; ++g) {
+		pbc_t *pbc = pb->pb[g];
+		pbc_enc(pbc, a[g]);
+		fwrite(&pbc->l, 4, 1, pb->fp);
+		fwrite(pbc->u, 1, pbc->l, pb->fp);
+	}
+	++pb->n;
+	return 0;
+}
+
+const uint8_t **pbf_read(pbf_t *pb)
+{
+	int g;
+	uint8_t t;
+	if (pb->is_writing) return 0;
+	fread(&t, 1, 1, pb->fp);
+	if (t == 'S') {
+		for (g = 0; g < pb->g; ++g)
+			fread(pb->pb[g]->S, 4, pb->m, pb->fp);
+		fread(&t, 1, 1, pb->fp);
+	}
+	if (t == 'B') {
+		for (g = 0; g < pb->g; ++g) {
+			int32_t l;
+			fread(&l, 4, 1, pb->fp);
+			fread(pb->buf, 1, l, pb->fp);
+			pb->buf[l] = 0;
+			pbc_dec(pb->pb[g], pb->buf);
+			pb->ret[g] = pb->pb[g]->u;
+		}
+	} else return 0;
+	return pb->ret;
+}
+
+int pbf_seek(pbf_t *pb, int k)
+{
+	return 0;
+}
+
+int pbf_subset(pbf_t *fp, int t, int *s)
+{
+	return 0;
+}
+
+/***********************************************************************/
+
+const int R = 2;
+#define N 7
+#define M 4
 static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}, {1,0,1,0}, {0,1,1,1}};
 
 #define pbs_key_S(x) ((x).S)
@@ -163,5 +314,23 @@ int main()
 		for (j = 0; j < R; ++j) putchar('0' + d[j].b); putchar('\n');
 	}
 	free(in); free(out);
+
+	pbf_t *pb;
+	pb = pbf_wopen("ttt.pbf", M, 1, 2);
+	for (k = 0; k < N; ++k) {
+		uint8_t *p = &a[k][0];
+		pbf_write(pb, &p);
+	}
+	pbf_close(pb);
+
+	const uint8_t **b;
+	pb = pbf_ropen("ttt.pbf");
+	fprintf(stderr, "out:\n");
+	while ((b = pbf_read(pb)) != 0) {
+		for (j = 0; j < M; ++j)
+			putchar('0' + b[0][j]);
+		putchar('\n');
+	}
+	pbf_close(pb);
 	return 0;
 }
