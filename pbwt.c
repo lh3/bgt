@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <stdio.h>
 #include "pbwt.h"
 
@@ -277,8 +278,13 @@ const uint8_t **pbf_read(pbf_t *pb)
 	return pb->ret;
 }
 
-int pbf_seek(pbf_t *pb, int k)
+int pbf_seek(pbf_t *pb, uint64_t k)
 {
+	int x, i;
+	if (pb->is_writing || pb->idx == 0 || k >= pb->n) return -1;
+	fseek(pb->fp, pb->idx[k>>pb->shift], SEEK_SET);
+	x = k & ((1<<pb->shift) - 1);
+	for (i = 0; i < x; ++i) pbf_read(pb);
 	return 0;
 }
 
@@ -325,6 +331,7 @@ int main()
 
 	const uint8_t **b;
 	pb = pbf_ropen("ttt.pbf");
+	pbf_seek(pb, 6);
 	fprintf(stderr, "out:\n");
 	while ((b = pbf_read(pb)) != 0) {
 		for (j = 0; j < M; ++j)

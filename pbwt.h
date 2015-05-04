@@ -31,9 +31,9 @@ void pbc_dec(pbc_t *pb, const uint8_t *b);
 pbf_t *pbf_wopen(const char *fn, int m, int g, int shift);
 pbf_t *pbf_ropen(const char *fn);
 int pbf_close(pbf_t *pb);
-int pbf_seek(pbf_t *pb, int k);
 int pbf_write(pbf_t *pb, uint8_t **a);
 const uint8_t **pbf_read(pbf_t *pb);
+int pbf_seek(pbf_t *pb, uint64_t k);
 int pbf_subset(pbf_t *fp, int t, int *s);
 
 #endif
