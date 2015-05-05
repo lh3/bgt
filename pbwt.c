@@ -330,7 +330,7 @@ int pbf_seek(pbf_t *pb, uint64_t k)
 	if (pb->is_writing) return -1;
 	if (k == pb->k) return 0;
 	if (k > pb->k && k - pb->k <= 1<<pb->shift) {
-		for (i = 0; i < k - pb->k; ++i) pbf_read(pb);
+		while (pb->k < k) pbf_read(pb);
 		return 0;
 	}
 	if (pb->idx == 0 || k >= pb->n) return -1;
