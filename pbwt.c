@@ -342,12 +342,13 @@ int pbf_seek(pbf_t *pb, uint64_t k)
 int pbf_subset(pbf_t *pb, int n_sub, int *sub)
 {
 	int i, g;
-	if (n_sub <= 0 || n_sub >= pb->m) return -1;
-	pb->n_sub = n_sub;
-	for (g = 0; g < pb->g; ++g) {
-		pb->sub[g] = (pbs_dat_t*)realloc(pb->sub[g], n_sub * sizeof(pbs_dat_t));
-		for (i = 0; i < n_sub; ++i) pb->sub[g][i].S = sub[i];
-		pbf_fill_sub(pb->m, pb->pb[g]->S, n_sub, pb->sub[g], pb->invS);
+	if (n_sub <= 0 || n_sub >= pb->m || sub == 0) n_sub = 0;
+	if ((pb->n_sub = n_sub) != 0) {
+		for (g = 0; g < pb->g; ++g) {
+			pb->sub[g] = (pbs_dat_t*)realloc(pb->sub[g], n_sub * sizeof(pbs_dat_t));
+			for (i = 0; i < n_sub; ++i) pb->sub[g][i].S = sub[i];
+			pbf_fill_sub(pb->m, pb->pb[g]->S, n_sub, pb->sub[g], pb->invS);
+		}
 	}
 	return 0;
 }
