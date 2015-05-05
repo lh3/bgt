@@ -178,7 +178,7 @@ pbf_t *pbf_open_w(const char *fn, int m, int g, int shift)
 	if (fn && strcmp(fn, "-") != 0) {
 		if ((fp = fopen(fn, "wb")) == NULL)
 			return 0;
-	} else fp = stdin;
+	} else fp = stdout;
 	pb = (pbf_t*)calloc(1, sizeof(pbf_t));
 	pb->fp = fp;
 	pb->m = m, pb->g = g, pb->shift = shift;

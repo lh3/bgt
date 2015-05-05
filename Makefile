@@ -32,5 +32,7 @@ depend:
 
 bgzf.o: bgzf.h
 hts.o: bgzf.h hts.h kseq.h khash.h ksort.h
+pbfview.o: pbwt.h
+pbwt.o: pbwt.h ksort.h
 ucf2bgt.o: vcf.h bgzf.h hts.h kstring.h
 vcf.o: kstring.h bgzf.h vcf.h hts.h khash.h kseq.h
