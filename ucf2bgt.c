@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include "vcf.h"
-#include "bgt.h"
 
 int main_ucf2bgt(int argc, char *argv[])
 {

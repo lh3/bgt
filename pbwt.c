@@ -362,8 +362,14 @@ int pbf_subset(pbf_t *pb, int n_sub, int *sub)
 	return 0;
 }
 
+int pbf_get_g(const pbf_t *pb) { return pb->g; }
+int pbf_get_m(const pbf_t *pb) { return pb->m; }
+int pbf_get_n(const pbf_t *pb) { return pb->n; }
+int pbf_get_shift(const pbf_t *pb) { return pb->shift; }
+
 /***********************************************************************/
 
+/*
 #define N 7
 #define M 4
 #define R 2
@@ -417,3 +423,4 @@ int main()
 	pbf_close(pb);
 	return 0;
 }
+*/

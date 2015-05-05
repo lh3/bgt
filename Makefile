@@ -1,10 +1,10 @@
 CC=			gcc
 CFLAGS=		-g -Wall -O2 -Wc++-compat -Wno-unused-function
 CPPFLAGS=
-OBJS=		bgzf.o hts.o vcf.o bgt.o ucf2bgt.o
+OBJS=		bgzf.o hts.o vcf.o ucf2bgt.o
 INCLUDES=
 LIBS=		-lpthread -lz
-PROG=		bgt
+PROG=		bgt pbfview
 
 .SUFFIXES:.c .o
 
@@ -15,6 +15,9 @@ all:$(PROG)
 
 bgt:$(OBJS) main.o
 		$(CC) $^ -o $@ $(LIBS)
+
+pbfview:pbfview.o pbwt.o
+		$(CC) $^ -o $@
 
 bgzf.o:bgzf.c bgzf.h khash.h
 		$(CC) -c $(CFLAGS) $(CPPFLAGS) -DBGZF_MT -DBGZF_CACHE $(INCLUDES) $< -o $@

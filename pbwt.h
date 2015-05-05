@@ -82,6 +82,11 @@ int pbf_seek(pbf_t *pb, uint64_t k);
  */
 int pbf_subset(pbf_t *fp, int n_sub, int *sub);
 
+int pbf_get_g(const pbf_t *pb);
+int pbf_get_m(const pbf_t *pb);
+int pbf_get_n(const pbf_t *pb);
+int pbf_get_shift(const pbf_t *pb);
+
 /***********************
  * Low-level functions *
  ***********************/
