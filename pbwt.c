@@ -117,6 +117,8 @@ void pbc_dec(pbc_t *pb, const uint8_t *b)
 #include "ksort.h"
 #define pbs_key_r(x) ((x).r)
 KRADIX_SORT_INIT(r, pbs_dat_t, pbs_key_r, 4)
+#define pbs_key_S(x) ((x).S)
+KRADIX_SORT_INIT(S, pbs_dat_t, pbs_key_S, 4)
 
 void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
 {
@@ -189,8 +191,10 @@ pbf_t *pbf_open_r(const char *fn)
 	for (i = 0; i < pb->g; ++i)
 		pb->pb[i] = pbc_init(pb->m);
 	pb->buf = (uint8_t*)calloc(pb->m + 1, 1);
+	pb->invS = (int32_t*)calloc(pb->m, 4);
 	pb->ret = (const uint8_t**)calloc(pb->g, sizeof(uint8_t*));
 	for (i = 0; i < pb->g; ++i) pb->ret[i] = pb->pb[i]->u;
+	pb->sub = (pbs_dat_t**)calloc(pb->g, sizeof(pbs_dat_t*));
 	if (fseek(fp, -8, SEEK_END) >= 0) {
 		uint64_t off;
 		uint8_t t;
@@ -221,10 +225,12 @@ int pbf_close(pbf_t *pb)
 		fwrite(pb->idx, 8, pb->n_idx, pb->fp);
 		fwrite(&off, 8, 1, pb->fp);
 	}
-	free(pb->ret); free(pb->buf);
-	for (g = 0; g < pb->g; ++g) free(pb->pb[g]);
-	free(pb->pb);
-	free(pb->idx);
+	free(pb->idx); free(pb->ret); free(pb->invS); free(pb->buf);
+	for (g = 0; g < pb->g; ++g) {
+		free(pb->pb[g]);
+		if (pb->sub) free(pb->sub[g]);
+	}
+	free(pb->sub); free(pb->pb);
 	fclose(pb->fp);
 	return 0;
 }
@@ -267,41 +273,69 @@ const uint8_t **pbf_read(pbf_t *pb)
 	}
 	if (t == 'B') {
 		for (g = 0; g < pb->g; ++g) {
-			int32_t l;
+			int32_t l, i;
 			fread(&l, 4, 1, pb->fp);
 			fread(pb->buf, 1, l, pb->fp);
 			pb->buf[l] = 0;
-			pbc_dec(pb->pb[g], pb->buf);
-			pb->ret[g] = pb->pb[g]->u;
+			if (pb->n_sub > 0 && pb->n_sub < pb->m) { // subset decoding
+				pbs_dat_t *sub = pb->sub[g];
+				pbs_dec(pb->m, pb->n_sub, sub, pb->buf);
+				radix_sort_S(sub, sub + pb->n_sub);
+				for (i = 0; i < pb->n_sub; ++i)
+					pb->pb[g]->u[i] = sub[i].b;
+			} else pbc_dec(pb->pb[g], pb->buf); // full decoding
 		}
 	} else return 0;
 	return pb->ret;
 }
 
+// find the rank of a subset of columns given S
+static inline void pbf_fill_sub(int m, const int32_t *S, int n_sub, pbs_dat_t *sub, int32_t *invS)
+{
+	int i;
+	for (i = 0; i < m; ++i) invS[S[i]] = i;
+	for (i = 0; i < n_sub; ++i)
+		sub[i].r = invS[sub[i].S];
+}
+
 int pbf_seek(pbf_t *pb, uint64_t k)
 {
-	int x, i;
+	int x, i, g;
+	uint8_t t;
 	if (pb->is_writing || pb->idx == 0 || k >= pb->n) return -1;
 	fseek(pb->fp, pb->idx[k>>pb->shift], SEEK_SET);
+	fread(&t, 1, 1, pb->fp);
+	assert(t == 'S'); // a bug or corrupted file if it is not an "S" line
+	for (g = 0; g < pb->g; ++g) {
+		fread(pb->pb[g]->S, 4, pb->m, pb->fp);
+		if (pb->n_sub > 0 && pb->n_sub < pb->m) // update pb->sub if needed
+			pbf_fill_sub(pb->m, pb->pb[g]->S, pb->n_sub, pb->sub[g], pb->invS);
+	}
 	x = k & ((1<<pb->shift) - 1);
 	for (i = 0; i < x; ++i) pbf_read(pb);
 	return 0;
 }
 
-int pbf_subset(pbf_t *fp, int t, int *s)
+int pbf_subset(pbf_t *pb, int n_sub, int *sub)
 {
+	int i, g;
+	if (n_sub <= 0 || n_sub >= pb->m) return -1;
+	pb->n_sub = n_sub;
+	for (g = 0; g < pb->g; ++g) {
+		pb->sub[g] = (pbs_dat_t*)realloc(pb->sub[g], n_sub * sizeof(pbs_dat_t));
+		for (i = 0; i < n_sub; ++i) pb->sub[g][i].S = sub[i];
+		pbf_fill_sub(pb->m, pb->pb[g]->S, n_sub, pb->sub[g], pb->invS);
+	}
 	return 0;
 }
 
 /***********************************************************************/
 
-const int R = 2;
 #define N 7
 #define M 4
+#define R 2
 static uint8_t a[N][M] = {{0,1,0,0}, {0,0,1,1}, {1,0,1,1}, {0,1,0,1}, {1,1,0,0}, {1,0,1,0}, {0,1,1,1}};
-
-#define pbs_key_S(x) ((x).S)
-KRADIX_SORT_INIT(S, pbs_dat_t, pbs_key_S, 4)
+static int32_t subset[R] = {1, 2};
 
 int main()
 {
@@ -331,10 +365,19 @@ int main()
 
 	const uint8_t **b;
 	pb = pbf_open_r("ttt.pbf");
-	pbf_seek(pb, 6);
-	fprintf(stderr, "out:\n");
+	pbf_seek(pb, 5);
+	printf("===> out (full) <===\n");
 	while ((b = pbf_read(pb)) != 0) {
 		for (j = 0; j < M; ++j)
+			putchar('0' + b[0][j]);
+		putchar('\n');
+	}
+
+	printf("===> out (part) <===\n");
+	pbf_seek(pb, 2);
+	pbf_subset(pb, R, subset);
+	while ((b = pbf_read(pb)) != 0) {
+		for (j = 0; j < R; ++j)
 			putchar('0' + b[0][j]);
 		putchar('\n');
 	}
