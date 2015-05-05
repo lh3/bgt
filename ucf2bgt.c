@@ -3,36 +3,38 @@
 #include <assert.h>
 #include <stdio.h>
 #include "vcf.h"
+#include "pbwt.h"
 
 int main_ucf2bgt(int argc, char *argv[])
 {
-	int c, clevel = -1, flag = 0, id_GT = -1;
-	char *fn_ref = 0, *fn_out = 0, moder[8], modew[8];
+	int i, c, clevel = -1, flag = 0, id_GT = -1;
+	char *fn_ref = 0, moder[8], modew[8];
+	char *prefix, *fn;
 	uint8_t *bits[2];
 	int64_t n = 0;
 	htsFile *in, *out;
 	bcf_hdr_t *h, *h0;
 	bcf1_t *b;
+	FILE *fp;
+	pbf_t *pb;
 
-	while ((c = getopt(argc, argv, "l:bSt:o:")) >= 0) {
+	while ((c = getopt(argc, argv, "l:St:")) >= 0) {
 		switch (c) {
 		case 'l': clevel = atoi(optarg); flag |= 2; break;
 		case 'S': flag |= 1; break;
-		case 'b': flag |= 2; break;
 		case 't': fn_ref = optarg; flag |= 1; break;
-		case 'o': fn_out = optarg; break;
 		}
 	}
-	if (argc == optind) {
+	if (argc - optind < 2) {
 		fprintf(stderr, "Usage: bgt ucf2bgt [options] <in.bcf>|<in.vcf>|<in.vcf.gz> <out-prefix>\n");
 		fprintf(stderr, "Options:\n");
-		fprintf(stderr, "  -b           output in BCF\n");
 		fprintf(stderr, "  -S           input is VCF\n");
-		fprintf(stderr, "  -o FILE      output file name [stdout]\n");
 		fprintf(stderr, "  -l INT       compression level [%d]\n", clevel);
 		fprintf(stderr, "  -t FILE      list of reference names and lengths [null]\n");
 		return 1;
 	}
+	prefix = argv[optind+1];
+	fn = malloc(strlen(prefix) + 9);
 	strcpy(moder, "r");
 	if ((flag&1) == 0) strcat(moder, "b");
 
@@ -44,15 +46,29 @@ int main_ucf2bgt(int argc, char *argv[])
 	bcf_hdr_append(h, "##INFO=<ID=_row,Number=1,Type=Integer,Description=\"row number\">");
 	h0 = bcf_hdr_subset(h, 0, 0, 0);
 
-	id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
-	assert(id_GT >= 0);
+	// write sample list
+	sprintf(fn, "%s.spl", prefix);
+	fp = fopen(fn, "wb");
+	for (i = 0; i < h->n[BCF_DT_SAMPLE]; ++i) {
+		fputs(h->id[BCF_DT_SAMPLE][i].key, fp);
+		fputc('\n', fp);
+	}
+	fclose(fp);
+
+	// prepare PBF to write
+	sprintf(fn, "%s.pbf", prefix);
+	pb = pbf_open_w(fn, h->n[BCF_DT_SAMPLE]*2, 2, 13);
 	bits[0] = (uint8_t*)calloc(h->n[BCF_DT_SAMPLE]*2, 1);
 	bits[1] = (uint8_t*)calloc(h->n[BCF_DT_SAMPLE]*2, 1);
 
-	strcpy(modew, "w");
-	if (clevel >= 0 && clevel <= 9) sprintf(modew + 1, "%d", clevel);
-	if (flag&2) strcat(modew, "b");
-	out = hts_open(fn_out? fn_out : "-", modew, 0);
+	// get the id of GT
+	id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
+	assert(id_GT >= 0);
+
+	strcpy(modew, "wb");
+	if (clevel >= 0 && clevel <= 9) sprintf(modew + 2, "%d", clevel);
+	sprintf(fn, "%s.bcf", prefix);
+	out = hts_open(fn, modew, 0);
 	vcf_hdr_write(out, h0);
 	b = bcf_init1();
 	while (vcf_read1(in, h, b) >= 0) {
@@ -60,12 +76,13 @@ int main_ucf2bgt(int argc, char *argv[])
 		bcf_fmt_t *gt;
 		int32_t key_id, val = n;
 
-		// insert "_row"
+		// insert "_row" to INFO
 		key_id = bcf_id2int(h, BCF_DT_ID, "_row");
 		++b->n_info;
 		bcf_enc_int1(&b->shared, key_id);
 		bcf_enc_vint(&b->shared, 1, &val, -1);
 
+		// write genotypes
 		bcf_unpack(b, BCF_UN_FMT);
 		for (i = 0; i < b->n_fmt; ++i)
 			if (b->d.fmt[i].id == id_GT) break;
@@ -73,6 +90,7 @@ int main_ucf2bgt(int argc, char *argv[])
 		gt = &b->d.fmt[i];
 		assert(gt->type == BCF_BT_INT8);
 		for (i = k = 0; i < b->n_sample; ++i, k += gt->n) {
+			assert(gt->n == 2);
 			for (j = 0; j < gt->n; ++j) {
 				int a = (int)(gt->p[k+j] >> 1) - 1;
 				if (a < 0) bits[0][j+k] = 0, bits[1][j+k] = 1;
@@ -80,9 +98,9 @@ int main_ucf2bgt(int argc, char *argv[])
 				else bits[0][j+k] = a, bits[1][j+k] = 0;
 			}
 		}
-		for (i = 0; i < b->n_sample*gt->n; ++i) putchar("01"[bits[0][i]]); putchar('\n');
-		for (i = 0; i < b->n_sample*gt->n; ++i) putchar("01"[bits[1][i]]); putchar('\n');
+		pbf_write(pb, bits);
 
+		// write BCF
 		bcf_subset(h0, b, 0, 0);
 		vcf_write1(out, h0, b);
 		++n;
@@ -90,8 +108,14 @@ int main_ucf2bgt(int argc, char *argv[])
 	bcf_destroy1(b);
 	hts_close(out);
 
+	pbf_close(pb);
 	free(bits[0]); free(bits[1]);
+
+	bcf_hdr_destroy(h0);
 	bcf_hdr_destroy(h);
 	hts_close(in);
+
+	bcf_index_build(fn, 14);
+	free(fn);
 	return 0;
 }
