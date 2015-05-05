@@ -99,10 +99,31 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 	free(t);
 }
 
-void bgt_set_region(bgt_t *bgt, const char *reg)
+int bgt_set_region(bgt_t *bgt, const char *reg)
 {
+	bgt->itr = bcf_itr_querys(bgt->idx, bgt->h0, reg);
+	return bgt->itr? 0 : -1;
 }
 
-void bgt_read(bgt_t *bgt, bcf1_t *b)
+void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 {
+	kstring_t ts = dst->shared, ti = dst->indiv;
+	free(dst->d.id); free(dst->d.allele); free(dst->d.flt); free(dst->d.info); free(dst->d.fmt);
+	*dst = *src;
+	memset(&dst->d, 0, sizeof(bcf_dec_t));
+	dst->unpacked = 0;
+	dst->unpack_ptr = 0;
+	dst->shared = ts; dst->indiv = ti;
+	kputsn(src->shared.s, src->shared.l, &dst->shared);
+	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
+}
+
+int bgt_read(bgt_t *bgt, bcf1_t *b)
+{
+	int ret;
+	ret = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
+	if (ret < 0) return ret;
+	assert(bgt->b0->n_sample == 0); // there shouldn't be any sample fields
+	bcf_copy(b, bgt->b0);
+	return 0;
 }

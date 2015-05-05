@@ -10,7 +10,8 @@ typedef struct {
 	void *h_samples; // hash table
 	pbf_t *pb;
 	htsFile *bcf;
-	bcf_hdr_t *h0; // site-only VCF header
+	bcf_hdr_t *h0; // site-only BCF header
+	bcf1_t *b0; // site-only BCF record
 	hts_idx_t *idx; // BCF index
 	hts_itr_t *itr;
 
