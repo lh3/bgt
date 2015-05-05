@@ -154,10 +154,10 @@ struct pbf_s {
 	int32_t g;  // number of bits per group
 	int32_t shift; // insert S every 1<<shift rows
 	int32_t is_writing; // file opend for writing
-	uint64_t n; // number of rows
+	int64_t n;  // number of rows
 
 	pbc_t **pb; // pbwt full codecs
-	const uint8_t **ret; // ret[g] points to pb[g]->u; this is for return
+	const uint8_t **ret; // ret[g] points to pb[g]->u; this is for return (writing only)
 
 	int32_t n_idx, m_idx;
 	uint64_t *idx; // file offset of "S" records
@@ -165,8 +165,9 @@ struct pbf_s {
 	int n_sub;
 	pbs_dat_t **sub;
 
-	uint8_t *buf;
-	int32_t *invS;
+	int64_t k;     // the row index just processed (reading only)
+	uint8_t *buf;  // reading only
+	int32_t *invS; // reading only
 };
 
 pbf_t *pbf_open_w(const char *fn, int m, int g, int shift)
@@ -308,6 +309,7 @@ const uint8_t **pbf_read(pbf_t *pb)
 					pb->pb[g]->u[i] = sub[i].b;
 			} else pbc_dec(pb->pb[g], pb->buf); // full decoding
 		}
+		++pb->k;
 	} else return 0;
 	return pb->ret;
 }
@@ -325,7 +327,13 @@ int pbf_seek(pbf_t *pb, uint64_t k)
 {
 	int x, i, g;
 	uint8_t t;
-	if (pb->is_writing || pb->idx == 0 || k >= pb->n) return -1;
+	if (pb->is_writing) return -1;
+	if (k == pb->k) return 0;
+	if (k > pb->k && k - pb->k <= 1<<pb->shift) {
+		for (i = 0; i < k - pb->k; ++i) pbf_read(pb);
+		return 0;
+	}
+	if (pb->idx == 0 || k >= pb->n) return -1;
 	fseek(pb->fp, pb->idx[k>>pb->shift], SEEK_SET);
 	fread(&t, 1, 1, pb->fp);
 	assert(t == 'S'); // a bug or corrupted file if it is not an "S" line
@@ -334,6 +342,7 @@ int pbf_seek(pbf_t *pb, uint64_t k)
 		if (pb->n_sub > 0 && pb->n_sub < pb->m) // update pb->sub if needed
 			pbf_fill_sub(pb->m, pb->pb[g]->S, pb->n_sub, pb->sub[g], pb->invS);
 	}
+	pb->n = k >> pb->shift << pb->shift;
 	x = k & ((1<<pb->shift) - 1);
 	for (i = 0; i < x; ++i) pbf_read(pb);
 	return 0;
