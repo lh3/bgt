@@ -131,7 +131,7 @@ void pbc_dec(pbc_t *pb, const uint8_t *b);
 void pbs_dec(int m, int n_sub, pbs_dat_t *sub, const uint8_t *u);
 
 #ifdef __cplusplus
-extern "C" {
+}
 #endif
 
 #endif
