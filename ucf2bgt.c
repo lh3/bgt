@@ -9,8 +9,9 @@ int main_ucf2bgt(int argc, char *argv[])
 	int c, clevel = -1, flag = 0, id_GT = -1;
 	char *fn_ref = 0, *fn_out = 0, moder[8], modew[8];
 	uint8_t *bits[2];
+	int64_t n = 0;
 	htsFile *in, *out;
-	bcf_hdr_t *h;
+	bcf_hdr_t *h, *h0;
 	bcf1_t *b;
 
 	while ((c = getopt(argc, argv, "l:bSt:o:")) >= 0) {
@@ -40,6 +41,9 @@ int main_ucf2bgt(int argc, char *argv[])
 	h = vcf_hdr_read(in);
 	assert(h);
 	assert(h->n[BCF_DT_SAMPLE] > 0);
+	bcf_hdr_append(h, "##INFO=<ID=_row,Number=1,Type=Integer,Description=\"row number\">");
+	h0 = bcf_hdr_subset(h, 0, 0, 0);
+
 	id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
 	assert(id_GT >= 0);
 	bits[0] = (uint8_t*)calloc(h->n[BCF_DT_SAMPLE]*2, 1);
@@ -49,11 +53,19 @@ int main_ucf2bgt(int argc, char *argv[])
 	if (clevel >= 0 && clevel <= 9) sprintf(modew + 1, "%d", clevel);
 	if (flag&2) strcat(modew, "b");
 	out = hts_open(fn_out? fn_out : "-", modew, 0);
-	vcf_hdr_write(out, h);
+	vcf_hdr_write(out, h0);
 	b = bcf_init1();
 	while (vcf_read1(in, h, b) >= 0) {
 		int i, k, j;
 		bcf_fmt_t *gt;
+		int32_t key_id, val = n;
+
+		// insert "_row"
+		key_id = bcf_id2int(h, BCF_DT_ID, "_row");
+		++b->n_info;
+		bcf_enc_int1(&b->shared, key_id);
+		bcf_enc_vint(&b->shared, 1, &val, -1);
+
 		bcf_unpack(b, BCF_UN_FMT);
 		for (i = 0; i < b->n_fmt; ++i)
 			if (b->d.fmt[i].id == id_GT) break;
@@ -70,7 +82,10 @@ int main_ucf2bgt(int argc, char *argv[])
 		}
 		for (i = 0; i < b->n_sample*gt->n; ++i) putchar("01"[bits[0][i]]); putchar('\n');
 		for (i = 0; i < b->n_sample*gt->n; ++i) putchar("01"[bits[1][i]]); putchar('\n');
-		vcf_write1(out, h, b);
+
+		bcf_subset(h0, b, 0, 0);
+		vcf_write1(out, h0, b);
+		++n;
 	}
 	bcf_destroy1(b);
 	hts_close(out);
