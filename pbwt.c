@@ -19,6 +19,7 @@ static uint32_t pbr_tbl[128] = {
 	0x0U,0x10000000U,0x20000000U,0x30000000U,0x40000000U,0x50000000U,0x60000000U,0x70000000U,0x80000000U,0x90000000U,0xa0000000U,0xb0000000U,0xc0000000U,0xd0000000U,0xe0000000U,0xf0000000U
 };
 
+// encode one run
 static inline int pbr_enc1(uint8_t *p, int l, int b)
 {
 	if (l >= 16) {
@@ -33,7 +34,7 @@ static inline int pbr_enc1(uint8_t *p, int l, int b)
 	}
 }
 
-// rle can be the same as u. In this case, u is overwritten.
+// encode a binary string with RLE. $rle can be the same as $u. In this case, $u is overwritten.
 static int pbr_enc(int m, const uint8_t *u, uint8_t *rle)
 {
 	int j, l;
@@ -51,11 +52,11 @@ static int pbr_enc(int m, const uint8_t *u, uint8_t *rle)
  * Encode/decode all columns *
  *****************************/
 
-// u MUST be at least m+1 long
+// Given S_{k-1} and A_k, derive B_k and S_k. $u MUST be at least m+1 long.
 int pbc_enc_core(int m, const int32_t *S0, const uint8_t *a, int32_t *S, uint8_t *u)
 {
 	int32_t *p[2], j, n1;
-	for (j = n1 = 0; j < m; ++j)
+	for (j = n1 = 0; j < m; ++j) // count the number of 1 bits
 		n1 += (u[j] = !!a[S0[j]]);
 	p[0] = S, p[1] = p[0] + (m - n1);
 	for (j = 0; j < m; ++j)
@@ -63,7 +64,7 @@ int pbc_enc_core(int m, const int32_t *S0, const uint8_t *a, int32_t *S, uint8_t
 	return pbr_enc(m, u, u);
 }
 
-// u MUST be null terminated
+// Given S_{k-1} and B_k, derive A_k and S_k. $u MUST be null terminated.
 void pbc_dec_core(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_t *a)
 {
 	const uint8_t *q;
@@ -72,7 +73,7 @@ void pbc_dec_core(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_
 		if (*q&1) n1 += pbr_tbl[*q>>1];
 	p[0] = S, p[1] = p[0] + (m - n1);
 	for (q = u, s = 0; *q; ++q) {
-		int i, l = pbr_tbl[*q>>1], b = *q&1;
+		int i, l = pbr_tbl[*q>>1], b = *q&1; // $l is the run length
 		for (i = 0; i < l; ++i) {
 			int32_t x = S0[s + i];
 			a[x] = b, *p[b]++ = x;
@@ -143,9 +144,30 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
 	}
 }
 
-/****************
- * Writing file *
- ****************/
+/************
+ * File I/O *
+ ************/
+
+struct pbf_s {
+	FILE *fp;   // PBF file handler
+	int32_t m;  // number of columns
+	int32_t g;  // number of bits per group
+	int32_t shift; // insert S every 1<<shift rows
+	int32_t is_writing; // file opend for writing
+	uint64_t n; // number of rows
+
+	pbc_t **pb; // pbwt full codecs
+	const uint8_t **ret; // ret[g] points to pb[g]->u; this is for return
+
+	int32_t n_idx, m_idx;
+	uint64_t *idx; // file offset of "S" records
+
+	int n_sub;
+	pbs_dat_t **sub;
+
+	uint8_t *buf;
+	int32_t *invS;
+};
 
 pbf_t *pbf_open_w(const char *fn, int m, int g, int shift)
 {
@@ -232,6 +254,7 @@ int pbf_close(pbf_t *pb)
 	}
 	free(pb->sub); free(pb->pb);
 	fclose(pb->fp);
+	free(pb);
 	return 0;
 }
 
