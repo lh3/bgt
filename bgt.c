@@ -64,7 +64,7 @@ void bgt_close(bgt_t *bgt)
 	free(bgt);
 }
 
-void bgt_set_sub(bgt_t *bgt, int n, char *const* samples)
+void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 {
 	int i, last, *t;
 	const khash_t(s2i) *h = (khash_t(s2i)*)bgt->h_samples;
@@ -97,4 +97,12 @@ void bgt_set_sub(bgt_t *bgt, int n, char *const* samples)
 		t[i<<1|0] = bgt->sub[i]<<1|0, t[i<<1|1] = bgt->sub[i]<<1|1;
 	pbf_subset(bgt->pb, bgt->n_sub<<1, t);
 	free(t);
+}
+
+void bgt_set_region(bgt_t *bgt, const char *reg)
+{
+}
+
+void bgt_read(bgt_t *bgt, bcf1_t *b)
+{
 }
