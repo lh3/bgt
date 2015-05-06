@@ -87,6 +87,7 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 	if (bgt->h_sub) bcf_hdr_destroy(bgt->h_sub);
 	bgt->h_sub = bcf_hdr_init();
 	kputsn(bgt->h0->text, bgt->h0->l_text, &str);
+	if (str.s[str.l-1] == 0) --str.l;
 	kputs("\tFORMAT", &str);
 	for (i = 0; i < bgt->n_sub; ++i) {
 		kputc('\t', &str);
