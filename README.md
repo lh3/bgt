@@ -26,4 +26,4 @@ proportional to the compressed size of genotype matrix, which is in practice
 much smaller than the original matrix. This is a significant improvement over
 the quadratic time complexity with BCF. BGT potentially supports advanced PBWT
 functionailities (e.g. haplotype matching, phasing and imputation), but these
-have not been implemented yet.
+are not on the plan for now.
