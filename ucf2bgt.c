@@ -89,13 +89,13 @@ int main_ucf2bgt(int argc, char *argv[])
 		if (i == b->n_fmt) continue; // no GT field
 		gt = &b->d.fmt[i];
 		assert(gt->type == BCF_BT_INT8);
-		for (i = k = 0; i < b->n_sample; ++i, k += gt->n) {
-			assert(gt->n == 2);
+		for (i = k = 0; i < b->n_sample; ++i, k += 2) {
+			assert(gt->n <= 2);
 			for (j = 0; j < gt->n; ++j) {
 				int a = (int)(gt->p[k+j] >> 1) - 1;
-				if (a < 0) bits[0][j+k] = 0, bits[1][j+k] = 1;
-				else if (a >= 2) bits[0][j+k] = bits[1][j+k] = 1;
-				else bits[0][j+k] = a, bits[1][j+k] = 0;
+				int b = a < 0? 2 : a >= 2? 3 : a;
+				if (gt->n == 2) bits[0][k+j] = b&1, bits[1][k+j] = b>>1;
+				else bits[0][k] = bits[0][k+1] = b&1, bits[1][k] = bits[1][k+1] = b>>1;
 			}
 		}
 		pbf_write(pb, bits);
