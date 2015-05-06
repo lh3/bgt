@@ -21,5 +21,8 @@ typedef struct {
 
 bgt_t *bgt_open(const char *prefix);
 void bgt_close(bgt_t *bgt);
+void bgt_set_samples(bgt_t *bgt, int n, char *const* samples);
+int bgt_set_region(bgt_t *bgt, const char *reg);
+int bgt_read(bgt_t *bgt, bcf1_t *b);
 
 #endif

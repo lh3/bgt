@@ -42,8 +42,10 @@ bgt_t *bgt_open(const char *prefix)
 	bgt->bcf = vcf_open(fn, "rb", 0);
 	bgt->h0 = vcf_hdr_read(bgt->bcf);
 	bgt->idx = bcf_index_load(fn);
+	bgt->b0 = bcf_init1();
 
 	free(fn);
+	bgt_set_samples(bgt, bgt->n_samples, bgt->samples);
 	return bgt;
 }
 
@@ -51,7 +53,7 @@ void bgt_close(bgt_t *bgt)
 {
 	int i;
 	free(bgt->sub);
-	bcf_hdr_destroy(bgt->h_sub);
+	if (bgt->h_sub) bcf_hdr_destroy(bgt->h_sub);
 	hts_itr_destroy(bgt->itr);
 	hts_idx_destroy(bgt->idx);
 	bcf_hdr_destroy(bgt->h0);
@@ -113,6 +115,7 @@ void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 	memset(&dst->d, 0, sizeof(bcf_dec_t));
 	dst->unpacked = 0;
 	dst->unpack_ptr = 0;
+	ts.l = ti.l = 0;
 	dst->shared = ts; dst->indiv = ti;
 	kputsn(src->shared.s, src->shared.l, &dst->shared);
 	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
@@ -120,10 +123,37 @@ void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 
 int bgt_read(bgt_t *bgt, bcf1_t *b)
 {
-	int ret;
+	int ret, i, id, row = -1;
+	const uint8_t **a;
+	int32_t *gt;
+
 	ret = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
 	if (ret < 0) return ret;
 	assert(bgt->b0->n_sample == 0); // there shouldn't be any sample fields
+
+	id = bcf_id2int(bgt->h0, BCF_DT_ID, "_row");
+	assert(id > 0);
+	bcf_unpack(bgt->b0, BCF_UN_INFO);
+	for (i = 0; i < bgt->b0->n_info; ++i) {
+		bcf_info_t *p = &bgt->b0->d.info[i];
+		if (p->key == id) row = p->v1.i;
+	}
+	assert(row >= 0);
 	bcf_copy(b, bgt->b0);
+
+	id = bcf_id2int(bgt->h_sub, BCF_DT_ID, "GT");
+	b->n_fmt = 1; b->n_sample = bgt->n_sub;
+	bcf_enc_int1(&b->indiv, id);
+	pbf_seek(bgt->pb, row);
+	a = pbf_read(bgt->pb);
+	gt = calloc(b->n_sample * 2, 4);
+	for (i = 0; i < b->n_sample<<1; ++i) {
+		int g = a[1][i]<<1 | a[0][i];
+		if (g == 2) gt[i] = 0;
+		else if (g == 3) gt[i] = (2+1)<<1;
+		else gt[i] = (g+1)<<1;
+	}
+	bcf_enc_vint(&b->indiv, 2 * b->n_sample, gt, 2);
+	free(gt);
 	return 0;
 }
