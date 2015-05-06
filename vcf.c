@@ -179,7 +179,7 @@ int bcf_hdr_sync(bcf_hdr_t *h)
 		khint_t k;
 		vdict_t *d = (vdict_t*)h->dict[i];
 		h->n[i]  = kh_size(d);
-		h->id[i] = (bcf_idpair_t*)malloc(kh_size(d) * sizeof(bcf_idpair_t));
+		h->id[i] = (bcf_idpair_t*)realloc(h->id[i], kh_size(d) * sizeof(bcf_idpair_t));
 		for (k = kh_begin(d); k != kh_end(d); ++k) {
 			if (!kh_exist(d, k)) continue;
 			h->id[i][kh_val(d, k).id].key = kh_key(d, k);
@@ -193,7 +193,7 @@ int bcf_hdr_parse(bcf_hdr_t *h)
 {
 	char *p, *q;
 	bcf_hdr_parse1(h, "##FILTER=<ID=PASS,Description=\"All filters passed\">"); // add PASS before anything else
-	for (p = q = h->text;; ++q) {
+	for (p = q = h->text; q - h->text < h->l_text; ++q) {
 		int c;
 		if (*q != '\n' && *q != 0) continue;
 		c = *q; *q = 0;
@@ -1065,7 +1065,7 @@ bcf_hdr_t *bcf_hdr_subset(const bcf_hdr_t *h0, int n, char *const* samples, int 
 		}
 	} else kputsn(h0->text, h0->l_text, &str);
 	h->text = str.s;
-	h->l_text = str.l;
+	h->l_text = str.l + 1; // including NULL
 	bcf_hdr_parse(h);
 	return h;
 }

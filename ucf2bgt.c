@@ -34,7 +34,7 @@ int main_ucf2bgt(int argc, char *argv[])
 		return 1;
 	}
 	prefix = argv[optind+1];
-	fn = malloc(strlen(prefix) + 9);
+	fn = (char*)malloc(strlen(prefix) + 9);
 	strcpy(moder, "r");
 	if ((flag&1) == 0) strcat(moder, "b");
 
