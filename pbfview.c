@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 		else if (c == 'c') {
 			if (n_sub == m_sub) {
 				m_sub = m_sub? m_sub<<1 : 4;
-				sub = realloc(sub, m_sub * sizeof(int));
+				sub = (int*)realloc(sub, m_sub * sizeof(int));
 			}
 			sub[n_sub++] = atol(optarg);
 		}
@@ -46,8 +46,8 @@ int main(int argc, char *argv[])
 		fscanf(fp, "%s%d%d", magic, &m, &g); // unsafe!!!
 		if (out_pbf) out = pbf_open_w(0, m, g, shift);
 		else printf("PIM1 %d %d\n", m, g);
-		a = calloc(g, sizeof(void*));
-		for (j = 0; j < g; ++j) a[j] = calloc(m, 1);
+		a = (uint8_t**)calloc(g, sizeof(void*));
+		for (j = 0; j < g; ++j) a[j] = (uint8_t*)calloc(m, 1);
 		while (!feof(fp)) {
 			for (i = 0; i < m; ++i) {
 				long x;

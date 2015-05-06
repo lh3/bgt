@@ -52,6 +52,7 @@ bgt_t *bgt_open(const char *prefix)
 void bgt_close(bgt_t *bgt)
 {
 	int i;
+	if (bgt->b0) bcf_destroy1(bgt->b0);
 	free(bgt->sub);
 	if (bgt->h_sub) bcf_hdr_destroy(bgt->h_sub);
 	hts_itr_destroy(bgt->itr);
@@ -59,7 +60,7 @@ void bgt_close(bgt_t *bgt)
 	bcf_hdr_destroy(bgt->h0);
 	vcf_close(bgt->bcf);
 	pbf_close(bgt->pb);
-	kh_destroy(s2i, bgt->h_samples);
+	kh_destroy(s2i, (kh_s2i_t*)bgt->h_samples);
 	for (i = 0; i < bgt->n_samples; ++i)
 		free(bgt->samples[i]);
 	free(bgt->samples);
@@ -92,10 +93,10 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 		kputs(bgt->samples[bgt->sub[i]], &str);
 	}
 	bgt->h_sub->text = str.s;
-	bgt->h_sub->l_text = str.l;
+	bgt->h_sub->l_text = str.l + 1; // including the last NULL
 	bcf_hdr_parse(bgt->h_sub);
 
-	t = malloc(bgt->n_sub * 2 * sizeof(int));
+	t = (int*)malloc(bgt->n_sub * 2 * sizeof(int));
 	for (i = 0; i < bgt->n_sub; ++i)
 		t[i<<1|0] = bgt->sub[i]<<1|0, t[i<<1|1] = bgt->sub[i]<<1|1;
 	pbf_subset(bgt->pb, bgt->n_sub<<1, t);
@@ -147,7 +148,7 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	bcf_enc_int1(&b->indiv, id);
 	pbf_seek(bgt->pb, row);
 	a = pbf_read(bgt->pb);
-	gt = calloc(b->n_sample * 2, 4);
+	gt = (int32_t*)calloc(b->n_sample * 2, 4);
 	for (i = 0; i < b->n_sample<<1; ++i) {
 		int g = a[1][i]<<1 | a[0][i];
 		if (g == 2) gt[i] = 0;
