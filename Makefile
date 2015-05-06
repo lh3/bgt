@@ -30,9 +30,11 @@ depend:
 
 # DO NOT DELETE
 
+bgt.o: bgt.h vcf.h bgzf.h hts.h kstring.h pbwt.h khash.h ksort.h
+bgtview.o: bgt.h vcf.h bgzf.h hts.h kstring.h pbwt.h
 bgzf.o: bgzf.h
 hts.o: bgzf.h hts.h kseq.h khash.h ksort.h
 pbfview.o: pbwt.h
 pbwt.o: pbwt.h ksort.h
-ucf2bgt.o: vcf.h bgzf.h hts.h kstring.h
+ucf2bgt.o: vcf.h bgzf.h hts.h kstring.h pbwt.h
 vcf.o: kstring.h bgzf.h vcf.h hts.h khash.h kseq.h
