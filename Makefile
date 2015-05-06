@@ -23,7 +23,7 @@ bgzf.o:bgzf.c bgzf.h khash.h
 		$(CC) -c $(CFLAGS) $(CPPFLAGS) -DBGZF_MT -DBGZF_CACHE $(INCLUDES) $< -o $@
 
 clean:
-		rm -fr gmon.out *.o a.out *.dSYM *~ *.a *.so *.dylib
+		rm -fr gmon.out *.o a.out *.dSYM *~ *.a *.so *.dylib $(PROG)
 
 depend:
 		(LC_ALL=C; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c)
