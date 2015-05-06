@@ -8,7 +8,7 @@ cd bgt; make
 # download precompiled k8 javascript shell
 wget -O- http://bit.ly/k8-021 | tar -jxf -
 # import; vcf2ucf.js turns a multi-allelic VCF to unary VCF
-./k8-linux vcf2ucf.js /path/to/srt.vcf.gz | ./bgt ucf2bgt -St ref.fa.fai - prefix
+./k8-linux vcf2ucf.js /path/to/srt.vcf.gz | ./bgt import -St ref.fa.fai - prefix
 # export
 ./bgt view -s:sample1,sample2 -r 1:100-200 prefix > sub.vcf
 ```

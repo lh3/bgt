@@ -43,6 +43,11 @@ int main_ucf2bgt(int argc, char *argv[])
 	h = vcf_hdr_read(in);
 	assert(h);
 	assert(h->n[BCF_DT_SAMPLE] > 0);
+	id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
+	if (id_GT < 0) {
+		bcf_hdr_append(h, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">");
+		id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
+	}
 	bcf_hdr_append(h, "##INFO=<ID=_row,Number=1,Type=Integer,Description=\"row number\">");
 	h0 = bcf_hdr_subset(h, 0, 0, 0);
 
@@ -60,10 +65,6 @@ int main_ucf2bgt(int argc, char *argv[])
 	pb = pbf_open_w(fn, h->n[BCF_DT_SAMPLE]*2, 2, 13);
 	bits[0] = (uint8_t*)calloc(h->n[BCF_DT_SAMPLE]*2, 1);
 	bits[1] = (uint8_t*)calloc(h->n[BCF_DT_SAMPLE]*2, 1);
-
-	// get the id of GT
-	id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
-	assert(id_GT >= 0);
 
 	strcpy(modew, "wb");
 	if (clevel >= 0 && clevel <= 9) sprintf(modew + 2, "%d", clevel);
