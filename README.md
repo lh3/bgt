@@ -9,11 +9,17 @@ wget -O- http://bit.ly/k8-021 | tar -jxf  -
 ./bgt view -s:sample1,sample2 -r 1:100-200 prefix > sub.vcf
 ```
 
-## What is BGT?
+## Introduction
 
-BGT is a PBWT-based binary representation of unary VCF without per-sample
-metadata. It imports from and exports to VCF/BCF. In comparison to BCF, BGT is
-smaller, much faster to extract a subset of samples and potentially supports
-more advanced haplotype-based queries.
+BGT is an alternative binary representation of unary VCF where multi-allelic
+records are split into multiple lines with additional alleles represented by
+the `<M>` symbolic allele. BGT imports from and exports to VCF/BCF *without
+per-sample metadata*. It is smaller and more efficient to process than BCF.
 
-(more explanations coming soon...)
+Internally, BGT uses BCF to keep per-allele annotations and PBWT to store
+sample genotypes. BGT is able to extract a small subset of samples in time
+proportional to the compressed size of genotype matrix, which is in practice
+much smaller than the original matrix. This is a significant improvement over
+the quadratic time complexity with BCF. BGT potentially supports advanced PBWT
+functionailities (e.g. haplotype matching, phasing and imputation), but these
+have not been implemented.
