@@ -4,8 +4,9 @@
 ```sh
 git clone https://github.com/lh3/bgt.git
 cd bgt; make
-wget -O- http://bit.ly/k8-021 | tar -jxf  -
-./k8-linux vcf2ucf.js srt.vcf.gz | ./bgt ucf2bgt -S - prefix
+wget -O- http://bit.ly/k8-021 | tar -jxf -
+# vcf2ucf.js turns a multi-allelic VCF to unary VCF
+./k8-linux vcf2ucf.js /path/to/srt.vcf.gz | ./bgt ucf2bgt -S - prefix
 ./bgt view -s:sample1,sample2 -r 1:100-200 prefix > sub.vcf
 ```
 
@@ -22,4 +23,4 @@ proportional to the compressed size of genotype matrix, which is in practice
 much smaller than the original matrix. This is a significant improvement over
 the quadratic time complexity with BCF. BGT potentially supports advanced PBWT
 functionailities (e.g. haplotype matching, phasing and imputation), but these
-have not been implemented.
+have not been implemented yet.
