@@ -2,11 +2,14 @@
 
 ## Getting started
 ```sh
+# installation
 git clone https://github.com/lh3/bgt.git
 cd bgt; make
+# download precompiled k8 javascript shell
 wget -O- http://bit.ly/k8-021 | tar -jxf -
-# vcf2ucf.js turns a multi-allelic VCF to unary VCF
+# import; vcf2ucf.js turns a multi-allelic VCF to unary VCF
 ./k8-linux vcf2ucf.js /path/to/srt.vcf.gz | ./bgt ucf2bgt -S - prefix
+# export
 ./bgt view -s:sample1,sample2 -r 1:100-200 prefix > sub.vcf
 ```
 
