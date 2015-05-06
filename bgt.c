@@ -82,10 +82,11 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 	for (i = bgt->n_sub = 1, last = bgt->sub[0]; i < n; ++i) // remove unidentified or duplicated samples
 		if (bgt->sub[i] != bgt->n_samples && bgt->sub[i] != last)
 			bgt->sub[bgt->n_sub++] = bgt->sub[i], last = bgt->sub[i];
-	kputsn(bgt->h0->text, bgt->h0->l_text, &str);
 
 	if (bgt->h_sub) bcf_hdr_destroy(bgt->h_sub);
 	bgt->h_sub = bcf_hdr_init();
+	kputsn(bgt->h0->text, bgt->h0->l_text, &str);
+	kputs("\tFORMAT", &str);
 	for (i = 0; i < bgt->n_sub; ++i) {
 		kputc('\t', &str);
 		kputs(bgt->samples[bgt->sub[i]], &str);
