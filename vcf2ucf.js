@@ -64,12 +64,16 @@ function b8_vcf2ucf(args)
 	var buf = new Bytes();
 	var srt_buf = [];
 
+	var has_GT = false;
 	while (file.readline(buf) >= 0) {
 		if (buf.length == 0) continue; // skip empty lines
 		var line = buf.toString();
 		if (line.charAt(0) == '#') { // VCF header
-			if (line.length > 1 && line.charAt(1) != '#')
+			if (/FORMAT=.*ID=GT\b/.test(line)) has_GT = true;
+			if (line.length > 1 && line.charAt(1) != '#') {
 				print('##ALT=<ID=M,Description="miscellaneous allele">');
+				if (!has_GT) print('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">');
+			}
 			print(line);
 		} else {
 			var t = line.split("\t");
