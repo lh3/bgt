@@ -32,11 +32,6 @@ typedef struct {
 } bgt_rawpos_t;
 
 typedef struct {
-	int rid, start, end;
-	kstring_t allele;
-} bgtm_allele_t;
-
-typedef struct {
 	int n_bgt;
 	bgt_t **bgt;
 	bgt_rawpos_t *rp;

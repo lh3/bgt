@@ -126,14 +126,12 @@ void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
-const uint8_t **bgt_read_core(bgt_t *bgt, int *ret)
+int bgt_read_core(bgt_t *bgt)
 {
 	int i, id, row;
-
-	*ret = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
-	if (*ret < 0) return 0;
+	row = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
+	if (row < 0) return row;
 	assert(bgt->b0->n_sample == 0); // there shouldn't be any sample fields
-
 	row = -1;
 	id = bcf_id2int(bgt->h0, BCF_DT_ID, "_row");
 	assert(id > 0);
@@ -143,9 +141,7 @@ const uint8_t **bgt_read_core(bgt_t *bgt, int *ret)
 		if (p->key == id) row = p->v1.i;
 	}
 	assert(row >= 0);
-
-	pbf_seek(bgt->pb, row);
-	return pbf_read(bgt->pb);
+	return row;
 }
 
 static void bgt_gen_gt(bgt_t *bgt, bcf1_t *b, const uint8_t **a)
@@ -166,8 +162,11 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 {
 	int ret;
 	const uint8_t **a;
-	a = bgt_read_core(bgt, &ret);
-	if (ret >= 0) bgt_gen_gt(bgt, b, a);
+	ret = bgt_read_core(bgt);
+	if (ret < 0) return ret;
+	pbf_seek(bgt->pb, ret);
+	a = pbf_read(bgt->pb);
+	bgt_gen_gt(bgt, b, a);
 	return ret;
 }
 /*
