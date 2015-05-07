@@ -126,36 +126,82 @@ void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
-int bgt_read(bgt_t *bgt, bcf1_t *b)
+int bgt_read_raw(bgt_t *bgt, bgt_raw1_t *r, int to_copy)
 {
-	int ret, i, id, row = -1;
+	int ret, i, id;
 	const uint8_t **a;
 
 	ret = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
 	if (ret < 0) return ret;
 	assert(bgt->b0->n_sample == 0); // there shouldn't be any sample fields
 
+	r->row = -1;
 	id = bcf_id2int(bgt->h0, BCF_DT_ID, "_row");
 	assert(id > 0);
 	bcf_unpack(bgt->b0, BCF_UN_INFO);
 	for (i = 0; i < bgt->b0->n_info; ++i) {
 		bcf_info_t *p = &bgt->b0->d.info[i];
-		if (p->key == id) row = p->v1.i;
+		if (p->key == id) r->row = p->v1.i;
 	}
-	assert(row >= 0);
-	bcf_copy(b, bgt->b0);
+	assert(r->row >= 0);
+	bcf_copy(r->b, bgt->b0);
 
+	pbf_seek(bgt->pb, r->row);
+	a = pbf_read(bgt->pb);
+	if (r->copied) {
+		free(r->bit[0]); r->bit[0] = 0;
+		free(r->bit[1]); r->bit[1] = 0;
+	}
+	if (to_copy) {
+		r->bit[0] = (uint8_t*)malloc(bgt->n_samples);
+		r->bit[1] = (uint8_t*)malloc(bgt->n_samples);
+		memcpy(r->bit[0], a[0], bgt->n_samples);
+		memcpy(r->bit[1], a[1], bgt->n_samples);
+	} else r->bit[0] = (uint8_t*)a[0], r->bit[1] = (uint8_t*)a[1], r->copied = 0;
+	return 0;
+}
+
+static void bgt_update_gt_from_raw(bgt_t *bgt, bgt_raw1_t *r)
+{
+	int id, i;
+	bcf1_t *b = r->b;
 	id = bcf_id2int(bgt->h_sub, BCF_DT_ID, "GT");
 	b->n_fmt = 1; b->n_sample = bgt->n_sub;
 	bcf_enc_int1(&b->indiv, id);
-	pbf_seek(bgt->pb, row);
-	a = pbf_read(bgt->pb);
-
-	// write genotypes
 	bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
 	ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
 	for (i = 0; i < b->n_sample<<1; ++i)
-		b->indiv.s[b->indiv.l++] = bgt_bits2gt[a[1][i]<<1 | a[0][i]];
+		b->indiv.s[b->indiv.l++] = bgt_bits2gt[r->bit[1][i]<<1 | r->bit[0][i]];
 	b->indiv.s[b->indiv.l] = 0;
-	return 0;
+}
+
+int bgt_read(bgt_t *bgt, bcf1_t *b)
+{
+	int ret;
+	bgt_raw1_t r;
+	r.b = b; r.copied = 0;
+	ret = bgt_read_raw(bgt, &r, 0);
+	bgt_update_gt_from_raw(bgt, &r);
+	return ret;
+}
+
+bgtm_t *bgtm_open(int n_files, char **fns)
+{
+	bgtm_t *bm;
+	int i;
+	bm = (bgtm_t*)calloc(1, sizeof(bgtm_t));
+	bm->n_bgt = n_files;
+	bm->bgt = (bgt_t**)calloc(bm->n_bgt, sizeof(void*));
+	for (i = 0; i < bm->n_bgt; ++i)
+		bm->bgt[i] = bgt_open(fns[i]);
+	return bm;
+}
+
+void bgtm_close(bgtm_t *bm)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_close(bm->bgt[i]);
+	free(bm->bgt);
+	free(bm);
 }

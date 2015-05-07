@@ -19,10 +19,33 @@ typedef struct {
 	bcf_hdr_t *h_sub;
 } bgt_t;
 
+typedef struct {
+	bcf1_t *b;
+	uint8_t *bit[2];
+	int row, copied;
+} bgt_raw1_t;
+
+typedef struct {
+	int m_pos, n_pos;
+} bgt_pos_t;
+
+typedef struct {
+	int tid, start, end;
+	kstring_t allele;
+} bgtm_allele_t;
+
+typedef struct {
+	int n_bgt;
+	bgt_t **bgt;
+} bgtm_t;
+
 bgt_t *bgt_open(const char *prefix);
 void bgt_close(bgt_t *bgt);
 void bgt_set_samples(bgt_t *bgt, int n, char *const* samples);
 int bgt_set_region(bgt_t *bgt, const char *reg);
 int bgt_read(bgt_t *bgt, bcf1_t *b);
+
+bgtm_t *bgtm_open(int n_files, char **fns);
+void bgtm_close(bgtm_t *bm);
 
 #endif
