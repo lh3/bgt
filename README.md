@@ -59,6 +59,7 @@ site annotations.  If we only retrieve genotypes (with `pbfview -c 6 -c 7 -c 46
 Generally, on decoding genotypes of all samples, BGT has the same time
 complexity as BCF but is associated with a larger constant, probably because
 BGT incurs many cache misses. Nonetheless, BGT is times smaller than BCF and
-faster to retrieve a subset of samples because the former has better time and
-space complexity. The difference should be more prominent given more samples.
+faster to retrieve a subset of samples. The difference should be more prominent
+given more samples because BGT has better space complexity and time complexity
+on sample subsetting.
 
