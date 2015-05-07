@@ -26,17 +26,20 @@ typedef struct {
 } bgt_raw1_t;
 
 typedef struct {
-	int m_pos, n_pos;
-} bgt_pos_t;
+	int rid, pos;
+	int m_b, n_b;
+	bgt_raw1_t *b, next;
+} bgt_rawpos_t;
 
 typedef struct {
-	int tid, start, end;
+	int rid, start, end;
 	kstring_t allele;
 } bgtm_allele_t;
 
 typedef struct {
 	int n_bgt;
 	bgt_t **bgt;
+	bgt_rawpos_t *rp;
 } bgtm_t;
 
 bgt_t *bgt_open(const char *prefix);

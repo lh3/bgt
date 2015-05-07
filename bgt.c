@@ -126,63 +126,84 @@ void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
-int bgt_read_raw(bgt_t *bgt, bgt_raw1_t *r, int to_copy)
+const uint8_t **bgt_read_core(bgt_t *bgt, int *ret)
 {
-	int ret, i, id;
-	const uint8_t **a;
+	int i, id, row;
 
-	ret = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
-	if (ret < 0) return ret;
+	*ret = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
+	if (*ret < 0) return 0;
 	assert(bgt->b0->n_sample == 0); // there shouldn't be any sample fields
 
-	r->row = -1;
+	row = -1;
 	id = bcf_id2int(bgt->h0, BCF_DT_ID, "_row");
 	assert(id > 0);
 	bcf_unpack(bgt->b0, BCF_UN_INFO);
 	for (i = 0; i < bgt->b0->n_info; ++i) {
 		bcf_info_t *p = &bgt->b0->d.info[i];
-		if (p->key == id) r->row = p->v1.i;
+		if (p->key == id) row = p->v1.i;
 	}
-	assert(r->row >= 0);
-	bcf_copy(r->b, bgt->b0);
+	assert(row >= 0);
 
-	pbf_seek(bgt->pb, r->row);
-	a = pbf_read(bgt->pb);
-	if (r->copied) {
-		free(r->bit[0]); r->bit[0] = 0;
-		free(r->bit[1]); r->bit[1] = 0;
-	}
-	if (to_copy) {
-		r->bit[0] = (uint8_t*)malloc(bgt->n_samples);
-		r->bit[1] = (uint8_t*)malloc(bgt->n_samples);
-		memcpy(r->bit[0], a[0], bgt->n_samples);
-		memcpy(r->bit[1], a[1], bgt->n_samples);
-	} else r->bit[0] = (uint8_t*)a[0], r->bit[1] = (uint8_t*)a[1], r->copied = 0;
-	return 0;
+	pbf_seek(bgt->pb, row);
+	return pbf_read(bgt->pb);
 }
 
-static void bgt_update_gt_from_raw(bgt_t *bgt, bgt_raw1_t *r)
+static void bgt_gen_gt(bgt_t *bgt, bcf1_t *b, const uint8_t **a)
 {
 	int id, i;
-	bcf1_t *b = r->b;
+	bcf_copy(b, bgt->b0);
 	id = bcf_id2int(bgt->h_sub, BCF_DT_ID, "GT");
 	b->n_fmt = 1; b->n_sample = bgt->n_sub;
 	bcf_enc_int1(&b->indiv, id);
 	bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
 	ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
 	for (i = 0; i < b->n_sample<<1; ++i)
-		b->indiv.s[b->indiv.l++] = bgt_bits2gt[r->bit[1][i]<<1 | r->bit[0][i]];
+		b->indiv.s[b->indiv.l++] = bgt_bits2gt[a[1][i]<<1 | a[0][i]];
 	b->indiv.s[b->indiv.l] = 0;
 }
 
 int bgt_read(bgt_t *bgt, bcf1_t *b)
 {
 	int ret;
-	bgt_raw1_t r;
-	r.b = b; r.copied = 0;
-	ret = bgt_read_raw(bgt, &r, 0);
-	bgt_update_gt_from_raw(bgt, &r);
+	const uint8_t **a;
+	a = bgt_read_core(bgt, &ret);
+	if (ret >= 0) bgt_gen_gt(bgt, b, a);
 	return ret;
+}
+/*
+static inline void bgt_copy_raw(int m, bgt_raw1_t *dst, const bgt_raw1_t *src)
+{
+	if (!dst->copied) {
+		dst->bit[0] = (uint8_t*)malloc(m);
+		dst->bit[1] = (uint8_t*)malloc(m);
+		dst->copied = 1;
+	}
+	memcpy(dst->bit[0], src->bit[0], m);
+	memcpy(dst->bit[1], src->bit[1], m);
+	dst->row = src->row;
+	bcf_copy(dst->b, src->b);
+}
+
+int bgt_rawpos_read(bgt_t *bgt, bgt_rawpos_t *p)
+{
+	p->n_b = 0;
+	if (p->next.row < 0) return -1; // end-of-file
+	if (p->next.b == 0 && bgt_read_raw(bgt, &p->next, 0) < 0) // this is the first call
+		return -2;
+	p->rid = p->next.b->rid, p->pos = p->next.b->pos;
+	do {
+		if (p->n_b == p->m_b) {
+			int i, oldm = p->m_b;
+			p->m_b = p->m_b? p->m_b<<1 : 4;
+			p->b = (bgt_raw1_t*)realloc(p->b, p->m_b * sizeof(bgt_raw1_t));
+			memset(&p->b[oldm], 0, (p->m_b - oldm) * sizeof(bgt_raw1_t));
+			for (i = oldm; i < p->m_b; ++i) p->b[i].b = bcf_init1();
+		}
+		bgt_copy_raw(bgt->n_sub, &p->b[p->n_b++], &p->next);
+		if (bgt_read_raw(bgt, &p->next, 0) < 0)
+			p->next.row = -1;
+	} while (p->next.row >= 0 && p->next.b->rid == p->rid && p->next.b->pos == p->pos);
+	return p->n_b;
 }
 
 bgtm_t *bgtm_open(int n_files, char **fns)
@@ -194,6 +215,7 @@ bgtm_t *bgtm_open(int n_files, char **fns)
 	bm->bgt = (bgt_t**)calloc(bm->n_bgt, sizeof(void*));
 	for (i = 0; i < bm->n_bgt; ++i)
 		bm->bgt[i] = bgt_open(fns[i]);
+	bm->rp = (bgt_rawpos_t*)calloc(bm->n_bgt, sizeof(bgt_rawpos_t));
 	return bm;
 }
 
@@ -205,3 +227,17 @@ void bgtm_close(bgtm_t *bm)
 	free(bm->bgt);
 	free(bm);
 }
+
+int bgtm_read_raw(bgtm_t *bm)
+{
+	int i, n_rest = 0;
+	for (i = 0; i < bm->n_bgt; ++i) {
+		if (bm->rp[i].n_b == 0)
+			bgt_rawpos_read(bm->bgt[i], &bm->rp[i]);
+		n_rest += bm->rp[i].n_b;
+	}
+	if (n_rest == 0) return -1;
+	// search for the smallest allele
+	return 0;
+}
+*/
