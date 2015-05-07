@@ -144,12 +144,11 @@ int bgt_read_core(bgt_t *bgt)
 	return row;
 }
 
-static void bgt_gen_gt(bgt_t *bgt, bcf1_t *b, const uint8_t **a)
+void bgt_gen_gt(const bcf_hdr_t *h, bcf1_t *b, int m, const uint8_t **a)
 {
 	int id, i;
-	bcf_copy(b, bgt->b0);
-	id = bcf_id2int(bgt->h_sub, BCF_DT_ID, "GT");
-	b->n_fmt = 1; b->n_sample = bgt->n_sub;
+	id = bcf_id2int(h, BCF_DT_ID, "GT");
+	b->n_fmt = 1; b->n_sample = m;
 	bcf_enc_int1(&b->indiv, id);
 	bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
 	ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
@@ -166,7 +165,8 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	if (ret < 0) return ret;
 	pbf_seek(bgt->pb, ret);
 	a = pbf_read(bgt->pb);
-	bgt_gen_gt(bgt, b, a);
+	bcf_copy(b, bgt->b0);
+	bgt_gen_gt(bgt->h_sub, b, bgt->n_sub, a);
 	return ret;
 }
 /*
