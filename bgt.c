@@ -124,11 +124,12 @@ void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
 }
 
+int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
+
 int bgt_read(bgt_t *bgt, bcf1_t *b)
 {
 	int ret, i, id, row = -1;
 	const uint8_t **a;
-	int32_t *gt;
 
 	ret = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
 	if (ret < 0) return ret;
@@ -149,14 +150,12 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	bcf_enc_int1(&b->indiv, id);
 	pbf_seek(bgt->pb, row);
 	a = pbf_read(bgt->pb);
-	gt = (int32_t*)calloc(b->n_sample * 2, 4);
-	for (i = 0; i < b->n_sample<<1; ++i) {
-		int g = a[1][i]<<1 | a[0][i];
-		if (g == 2) gt[i] = 0;
-		else if (g == 3) gt[i] = (2+1)<<1;
-		else gt[i] = (g+1)<<1;
-	}
-	bcf_enc_vint(&b->indiv, 2 * b->n_sample, gt, 2);
-	free(gt);
+
+	// write genotypes
+	bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
+	ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
+	for (i = 0; i < b->n_sample<<1; ++i)
+		b->indiv.s[b->indiv.l++] = bgt_bits2gt[a[1][i]<<1 | a[0][i]];
+	b->indiv.s[b->indiv.l] = 0;
 	return 0;
 }

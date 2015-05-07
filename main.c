@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#define BGT_VERSION "r50"
+#define BGT_VERSION "r51"
 
 int main_ucf2bgt(int argc, char *argv[]);
 int main_view(int argc, char *argv[]);
