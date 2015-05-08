@@ -81,7 +81,7 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 	for (i = 0; i < n; ++i) {
 		khint_t k;
 		k = kh_get(s2i, h, samples[i]);
-		bgt->sub[i] = k != kh_end(h)? i : bgt->n_samples;
+		bgt->sub[i] = k != kh_end(h)? kh_val(h, k) : bgt->n_samples;
 	}
 	radix_sort_i(bgt->sub, bgt->sub + n);
 	for (i = bgt->n_sub = 1, last = bgt->sub[0]; i < n; ++i) // remove unidentified or duplicated samples
@@ -249,6 +249,7 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kstring_t h = {0,0,0};
 	bcf_hdr_t *h0;
 	if (bm->n_bgt == 0) return;
+	fprintf(stderr, "++ %d\n", n);
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_set_samples(bm->bgt[i], n, samples);
 
@@ -329,7 +330,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 			if (bcfcmp(b, p->b[j].b0) == 0) { // then swap to the end
 				q = p->b[j];
 				++n_min;
-				swap = p->b[end], p->b[end] = p->b[j], p->b[j] = swap;
+				if (j != end) swap = p->b[end], p->b[end] = p->b[j], p->b[j] = swap;
 				--end, --j;
 			}
 		}
