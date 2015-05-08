@@ -14,6 +14,7 @@ static int usage()
 	fprintf(stderr, "Commands:\n");
 	fprintf(stderr, "  import       convert unary VCF to BGT\n");
 	fprintf(stderr, "  view         extract from BGT\n");
+	fprintf(stderr, "  mview        extract from multiple BGT\n");
 	fprintf(stderr, "  version      show version number\n");
 	return 1;
 }
@@ -24,6 +25,7 @@ int main(int argc, char *argv[])
 	if (strcmp(argv[1], "ucf2bgt") == 0) return main_ucf2bgt(argc-1, argv+1);
 	else if (strcmp(argv[1], "import") == 0) return main_ucf2bgt(argc-1, argv+1);
 	else if (strcmp(argv[1], "view") == 0) return main_view(argc-1, argv+1);
+	else if (strcmp(argv[1], "mview") == 0) return main_view(argc-1, argv+1);
 	else if (strcmp(argv[1], "version") == 0) {
 		puts(BGT_VERSION);
 		return 0;

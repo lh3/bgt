@@ -186,7 +186,7 @@ static void append_to_pos(bgt_pos_t *p, const bcf1_t *b0, int m, const uint8_t *
 int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
 {
 	p->n_b = 0;
-	if (p->finished || bgt->n_sub == 0) return -1; // end-of-file
+	if (p->finished || bgt->n_sub == 0) return -1; // end-of-file or nothing to read
 	if (p->row < 0 && (p->row = bgt_read_core(bgt)) < 0) {
 		p->finished = 1;
 		return p->row;
@@ -251,7 +251,17 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 
 	h0 = bm->bgt[0]->h0; // FIXME: test if headers are consistent
 	kputs("##fileformat=VCFv4.1\n", &h);
+	kputs("##INFO=<ID=AC,Number=A,Type=String,Description=\"Count of alternate alleles\">\n", &h);
+	kputs("##INFO=<ID=AN,Number=A,Type=String,Description=\"Count of total alleles\">\n", &h);
 	kputs("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n", &h);
+	kputs("##ALT=<ID=M,Description=\"Multi-allele\">\n", &h);
+	kputs("##ALT=<ID=DEL,Description=\"Deletion\">\n", &h);
+	kputs("##ALT=<ID=DUP,Description=\"Duplication\">\n", &h);
+	kputs("##ALT=<ID=INS,Description=\"Insertion\">\n", &h);
+	kputs("##ALT=<ID=INV,Description=\"Inversion\">\n", &h);
+	kputs("##ALT=<ID=DUP:TANDEM,Description=\"Tandem duplication\">\n", &h);
+	kputs("##ALT=<ID=DEL:ME,Description=\"Deletion of mobile element\">\n", &h);
+	kputs("##ALT=<ID=INS:ME,Description=\"Insertion of mobile element\">\n", &h);
 	for (i = 0; i < h0->n[BCF_DT_CTG]; ++i)
 		ksprintf(&h, "##contig=<ID=%s,length=%d>\n", h0->id[BCF_DT_CTG][i].key, h0->id[BCF_DT_CTG][i].val->info[0]);
 	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT", &h);
@@ -274,6 +284,11 @@ int bgtm_set_region(bgtm_t *bm, const char *reg)
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_set_region(bm->bgt[i], reg);
 	return 0;
+}
+
+int bgtm_read(bgtm_t *bm, bcf1_t *b)
+{
+	return -1;
 }
 
 /*

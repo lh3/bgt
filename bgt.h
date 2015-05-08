@@ -47,5 +47,6 @@ bgtm_t *bgtm_open(int n_files, char *const*fns);
 void bgtm_close(bgtm_t *bm);
 void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
+int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
 #endif
