@@ -1102,3 +1102,43 @@ int bcf_is_snp(bcf1_t *v)
 		if (strlen(v->d.allele[i]) != 1) break;
 	return i == v->n_allele;
 }
+
+void bcfcpy(bcf1_t *dst, const bcf1_t *src)
+{
+	kstring_t ts = dst->shared, ti = dst->indiv;
+	free(dst->d.id); free(dst->d.allele); free(dst->d.flt); free(dst->d.info); free(dst->d.fmt);
+	*dst = *src;
+	memset(&dst->d, 0, sizeof(bcf_dec_t));
+	dst->unpacked = 0;
+	dst->unpack_ptr = 0;
+	ts.l = ti.l = 0;
+	dst->shared = ts; dst->indiv = ti;
+	kputsn(src->shared.s, src->shared.l, &dst->shared);
+	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
+}
+
+char *bcf_get_alt1(const bcf1_t *b, int *len)
+{
+	int x, type;
+	uint8_t *ptr;
+	ptr = (uint8_t*)b->shared.s;
+	x = bcf_dec_size(ptr, &ptr, &type); // size of ID
+	ptr += x << bcf_type_shift[type]; // skip ID
+	x = bcf_dec_size(ptr, &ptr, &type); // size of REF
+	ptr += x << bcf_type_shift[type]; // skip REF
+	*len = bcf_dec_size(ptr, &ptr, &type); // size of ALT1
+	return (char*)ptr;
+}
+
+int bcfcmp(const bcf1_t *a, const bcf1_t *b)
+{
+	int l[2];
+	char *ptr[2];
+	if (a->rid != b->rid) return a->rid - b->rid;
+	if (a->pos != b->pos) return a->pos - b->pos;
+	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
+	ptr[0] = bcf_get_alt1(a, &l[0]);
+	ptr[1] = bcf_get_alt1(a, &l[1]);
+	if (l[0] != l[1]) return l[0] - l[1];
+	return strncmp(ptr[0], ptr[1], l[0]);
+}

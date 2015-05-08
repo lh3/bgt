@@ -156,7 +156,7 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	if (ret < 0) return ret;
 	pbf_seek(bgt->pb, ret);
 	a = pbf_read(bgt->pb);
-	bcf_copy(b, bgt->b0);
+	bcfcpy(b, bgt->b0);
 	bgt_gen_gt(bgt->h_sub, b, bgt->n_sub, a);
 	return ret;
 }
@@ -176,7 +176,7 @@ static void append_to_pos(bgt_pos_t *p, const bcf1_t *b0, int m, const uint8_t *
 	}
 	r = &p->b[p->n_b++];
 	if (r->b0 == 0) r->b0 = bcf_init1();
-	bcf_copy(r->b0, b0);
+	bcfcpy(r->b0, b0);
 	r->a[0] = (uint8_t*)realloc(r->a[0], m);
 	r->a[1] = (uint8_t*)realloc(r->a[1], m);
 	memcpy(r->a[0], a[0], m);

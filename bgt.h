@@ -48,44 +48,4 @@ void bgtm_close(bgtm_t *bm);
 void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 
-/******************************
- * The missing BCF operations *
- ******************************/
-
-#include <string.h>
-
-static inline void bcf_copy(bcf1_t *dst, const bcf1_t *src)
-{
-	kstring_t ts = dst->shared, ti = dst->indiv;
-	free(dst->d.id); free(dst->d.allele); free(dst->d.flt); free(dst->d.info); free(dst->d.fmt);
-	*dst = *src;
-	memset(&dst->d, 0, sizeof(bcf_dec_t));
-	dst->unpacked = 0;
-	dst->unpack_ptr = 0;
-	ts.l = ti.l = 0;
-	dst->shared = ts; dst->indiv = ti;
-	kputsn(src->shared.s, src->shared.l, &dst->shared);
-	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
-}
-
-static inline int bcf_cmp(const bcf1_t *a, const bcf1_t *b)
-{
-	int i, l[2];
-	uint8_t *ptr[2];
-	if (a->rid != b->rid) return a->rid - b->rid;
-	if (a->pos != b->pos) return a->pos - b->pos;
-	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
-	for (i = 0; i < 2; ++i) {
-		int x, type;
-		ptr[i] = (uint8_t*)a->shared.s;
-		x = bcf_dec_size(ptr[i], &ptr[i], &type); // size of ID
-		ptr[i] += x << bcf_type_shift[type]; // skip ID
-		x = bcf_dec_size(ptr[i], &ptr[i], &type); // size of REF
-		ptr[i] += x << bcf_type_shift[type]; // skip REF
-		l[i] = bcf_dec_size(ptr[i], &ptr[i], &type); // size of ALT1
-	}
-	if (l[0] != l[1]) return l[0] - l[1];
-	return strncmp((char*)ptr[0], (char*)ptr[1], l[0]);
-}
-
 #endif
