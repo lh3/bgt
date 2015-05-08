@@ -56,10 +56,7 @@ int main_view(int argc, char *argv[])
 	vcf_hdr_write(out, bgt? bgt->h_sub : bm->h);
 
 	b = bcf_init1();
-//	bcf1_t *bb = bcf_init1();
 	while (read1(bgt, bm, b) >= 0) {
-//		bcfcpy_min(bb, b, 0);
-//		vcf_write1(out, bgt->h_sub, bb);
 		vcf_write1(out, bgt? bgt->h_sub : bm->h, b);
 	}
 	bcf_destroy1(b);

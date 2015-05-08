@@ -1160,12 +1160,12 @@ void bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)
 	bcf_get_ref_alt1(b0, &l_ref, &ref, &l_alt, &alt);
 	b->rid = b0->rid, b->pos = b0->pos, b->rlen = b0->rlen;
 	b->qual = 0, b->n_info = b->n_fmt = b->n_sample = 0;
-	b->n_allele = alt2? 1 : 2;
+	b->n_allele = alt2? 3 : 2;
 	b->shared.l = b->indiv.l = 0;
 	bcf_enc_size(&b->shared, 0, BCF_BT_CHAR); // empty ID
 	bcf_enc_vchar(&b->shared, l_ref, ref); // copy REF
 	bcf_enc_vchar(&b->shared, l_alt, alt); // copy the first ALT
 	if (alt2) bcf_enc_vchar(&b->shared, strlen(alt2), alt2); // add <M> if requested
 	bcf_enc_vint(&b->shared, 0, 0, -1); // empty FILTER
-	// no need to add INFO when b->n_info==0
+	b->unpacked = 0;
 }

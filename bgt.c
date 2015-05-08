@@ -175,7 +175,7 @@ static void append_to_pos(bgt_pos_t *p, const bcf1_t *b0, int m, const uint8_t *
 		int oldm = p->m_b;
 		p->m_b = p->m_b? p->m_b<<1 : 4;
 		p->b = (bgt_rec_t*)realloc(p->b, p->m_b * sizeof(bgt_rec_t));
-		memset(&p->b[oldm], 0, (p->m_b - oldm) & sizeof(bgt_rec_t));
+		memset(&p->b[oldm], 0, (p->m_b - oldm) * sizeof(bgt_rec_t));
 	}
 	r = &p->b[p->n_b++];
 	if (r->b0 == 0) r->b0 = bcf_init1();
@@ -280,8 +280,8 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	bm->h = bcf_hdr_init();
 	bm->h->l_text = h.l + 1, bm->h->m_text = h.m, bm->h->text = h.s;
 	bcf_hdr_parse(bm->h);
-	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_sub);
-	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_sub);
+	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_sub<<1);
+	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_sub<<1);
 }
 
 int bgtm_set_region(bgtm_t *bm, const char *reg)
@@ -290,12 +290,6 @@ int bgtm_set_region(bgtm_t *bm, const char *reg)
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_set_region(bm->bgt[i], reg);
 	return 0;
-}
-
-static inline void swap_rec(bgt_rec_t *a, bgt_rec_t *b)
-{
-	bgt_rec_t t;
-	t = *a, *a = *b, *b = t;
 }
 
 int bgtm_read(bgtm_t *bm, bcf1_t *b)
@@ -324,12 +318,11 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	}
 	assert(b0 && max_allele >= 2);
 	bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
-	return 0;
 	// generate bm->a
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];
 		bgt_t *bgt = bm->bgt[i];
-		bgt_rec_t q;
+		bgt_rec_t q, swap;
 		int n_min = 0, k;
 		if (bgt->n_sub == 0) continue;
 		for (j = k = 0; j < p->n_b; ++j) {
@@ -337,7 +330,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 				q = p->b[j];
 				++n_min;
 			} else {
-				if (j != k) swap_rec(&p->b[j], &p->b[k]);
+				if (j != k) swap = p->b[j], p->b[j] = p->b[k], p->b[k] = swap;
 				++k;
 			}
 		}
