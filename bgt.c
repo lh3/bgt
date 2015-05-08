@@ -310,7 +310,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 			if (b0) {
 				int c;
 				c = bcfcmp(b0, p->b[j].b0);
-				if (c < 0) b0 = p->b[j].b0, max_allele = b0->n_allele;
+				if (c > 0) b0 = p->b[j].b0, max_allele = b0->n_allele;
 				else if (c == 0)
 					max_allele = p->b[j].b0->n_allele > max_allele? p->b[j].b0->n_allele : max_allele;
 			} else b0 = p->b[j].b0, max_allele = b0->n_allele;
@@ -323,18 +323,17 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		bgt_pos_t *p = &bm->p[i];
 		bgt_t *bgt = bm->bgt[i];
 		bgt_rec_t q, swap;
-		int n_min = 0, k;
+		int n_min = 0, end = p->n_b - 1;
 		if (bgt->n_sub == 0) continue;
-		for (j = k = 0; j < p->n_b; ++j) {
-			if (bcfcmp(b, p->b[j].b0) == 0) { // then copy out
+		for (j = 0; j <= end; ++j) {
+			if (bcfcmp(b, p->b[j].b0) == 0) { // then swap to the end
 				q = p->b[j];
 				++n_min;
-			} else {
-				if (j != k) swap = p->b[j], p->b[j] = p->b[k], p->b[k] = swap;
-				++k;
+				swap = p->b[end], p->b[end] = p->b[j], p->b[j] = swap;
+				--end, --j;
 			}
 		}
-		p->n_b = k;
+		p->n_b = end + 1;
 		if (n_min) { // copy; when there are multiple, we only copy the last one
 			memcpy(bm->a[0] + off, q.a[0], bgt->n_sub<<1);
 			memcpy(bm->a[1] + off, q.a[1], bgt->n_sub<<1);

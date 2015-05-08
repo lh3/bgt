@@ -1134,9 +1134,9 @@ void bcf_get_ref_alt1(const bcf1_t *b, int *l_ref, char **ref, int *l_alt, char 
 
 char *bcf_get_alt1(const bcf1_t *b, int *len)
 {
-	int l_ref, l_alt;
+	int l_ref;
 	char *ref, *alt;
-	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
+	bcf_get_ref_alt1(b, &l_ref, &ref, len, &alt);
 	return alt;
 }
 
