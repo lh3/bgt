@@ -11,6 +11,10 @@ KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
 #define generic_key(x) (x)
 KRADIX_SORT_INIT(i, int, generic_key, 4)
 
+/**********************
+ * Single BGT reading *
+ **********************/
+
 bgt_t *bgt_open(const char *prefix)
 {
 	char *fn;
@@ -111,40 +115,6 @@ int bgt_set_region(bgt_t *bgt, const char *reg)
 	return bgt->itr? 0 : -1;
 }
 
-void bcf_copy(bcf1_t *dst, const bcf1_t *src)
-{
-	kstring_t ts = dst->shared, ti = dst->indiv;
-	free(dst->d.id); free(dst->d.allele); free(dst->d.flt); free(dst->d.info); free(dst->d.fmt);
-	*dst = *src;
-	memset(&dst->d, 0, sizeof(bcf_dec_t));
-	dst->unpacked = 0;
-	dst->unpack_ptr = 0;
-	ts.l = ti.l = 0;
-	dst->shared = ts; dst->indiv = ti;
-	kputsn(src->shared.s, src->shared.l, &dst->shared);
-	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
-}
-
-static inline int bcf_cmp(const bcf1_t *a, const bcf1_t *b)
-{
-	int i, l[2];
-	uint8_t *ptr[2];
-	if (a->rid != b->rid) return a->rid - b->rid;
-	if (a->pos != b->pos) return a->pos - b->pos;
-	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
-	for (i = 0; i < 2; ++i) {
-		int x, type;
-		ptr[i] = (uint8_t*)a->shared.s;
-		x = bcf_dec_size(ptr[i], &ptr[i], &type); // size of ID
-		ptr[i] += x << bcf_type_shift[type]; // skip ID
-		x = bcf_dec_size(ptr[i], &ptr[i], &type); // size of REF
-		ptr[i] += x << bcf_type_shift[type]; // skip REF
-		l[i] = bcf_dec_size(ptr[i], &ptr[i], &type); // size of ALT1
-	}
-	if (l[0] != l[1]) return l[0] - l[1];
-	return strncmp((char*)ptr[0], (char*)ptr[1], l[0]);
-}
-
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
 int bgt_read_core(bgt_t *bgt)
@@ -191,6 +161,10 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	return ret;
 }
 
+/*************************************
+ * reading records with the same pos *
+ *************************************/
+
 static void append_to_pos(bgt_pos_t *p, const bcf1_t *b0, int m, const uint8_t **a)
 {
 	bgt_rec_t *r;
@@ -228,6 +202,10 @@ int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
 	if (p->row < 0) p->finished = 1;
 	return p->n_b;
 }
+
+/*********************
+ * Multi BGT reading *
+ *********************/
 
 bgtm_t *bgtm_open(int n_files, char *const*fns)
 {
