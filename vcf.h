@@ -241,7 +241,7 @@ extern "C" {
 	int bcf_subset(const bcf_hdr_t *h, bcf1_t *v, int n, int *imap);
 	int bcf_is_snp(bcf1_t *v);
 
-
+	char *bcf_get_alt1(const bcf1_t *b, int *len);
 	void bcfcpy(bcf1_t *dst, const bcf1_t *src);
 	int bcfcmp(const bcf1_t *a, const bcf1_t *b);
 

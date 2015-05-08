@@ -1121,6 +1121,8 @@ char *bcf_get_alt1(const bcf1_t *b, int *len)
 {
 	int x, type;
 	uint8_t *ptr;
+	*len = 0;
+	if (b->shared.l == 0) return 0;
 	ptr = (uint8_t*)b->shared.s;
 	x = bcf_dec_size(ptr, &ptr, &type); // size of ID
 	ptr += x << bcf_type_shift[type]; // skip ID
@@ -1130,7 +1132,7 @@ char *bcf_get_alt1(const bcf1_t *b, int *len)
 	return (char*)ptr;
 }
 
-int bcfcmp(const bcf1_t *a, const bcf1_t *b)
+int bcfcmp(const bcf1_t *a, const bcf1_t *b) // FIXME: segfault when a or b is empty; also, what happens when there are not ALT alleles?
 {
 	int l[2];
 	char *ptr[2];
@@ -1138,7 +1140,7 @@ int bcfcmp(const bcf1_t *a, const bcf1_t *b)
 	if (a->pos != b->pos) return a->pos - b->pos;
 	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
 	ptr[0] = bcf_get_alt1(a, &l[0]);
-	ptr[1] = bcf_get_alt1(a, &l[1]);
+	ptr[1] = bcf_get_alt1(b, &l[1]);
 	if (l[0] != l[1]) return l[0] - l[1];
 	return strncmp(ptr[0], ptr[1], l[0]);
 }
