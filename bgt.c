@@ -344,6 +344,6 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		}
 		off += bgt->n_sub<<1;
 	}
-//	bgt_gen_gt(bm->h, b, bm->n_sub, (const uint8_t**)bm->a);
+	bgt_gen_gt(bm->h, b, bm->n_sub, (const uint8_t**)bm->a);
 	return 0;
 }
