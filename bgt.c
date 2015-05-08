@@ -83,6 +83,7 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 	for (i = bgt->n_sub = 1, last = bgt->sub[0]; i < n; ++i) // remove unidentified or duplicated samples
 		if (bgt->sub[i] != bgt->n_samples && bgt->sub[i] != last)
 			bgt->sub[bgt->n_sub++] = bgt->sub[i], last = bgt->sub[i];
+	if (bgt->n_sub == 0) return;
 
 	if (bgt->h_sub) bcf_hdr_destroy(bgt->h_sub);
 	bgt->h_sub = bcf_hdr_init();
@@ -122,6 +123,26 @@ void bcf_copy(bcf1_t *dst, const bcf1_t *src)
 	dst->shared = ts; dst->indiv = ti;
 	kputsn(src->shared.s, src->shared.l, &dst->shared);
 	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
+}
+
+static inline int bcf_cmp(const bcf1_t *a, const bcf1_t *b)
+{
+	int i, l[2];
+	uint8_t *ptr[2];
+	if (a->rid != b->rid) return a->rid - b->rid;
+	if (a->pos != b->pos) return a->pos - b->pos;
+	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
+	for (i = 0; i < 2; ++i) {
+		int x, type;
+		ptr[i] = (uint8_t*)a->shared.s;
+		x = bcf_dec_size(ptr[i], &ptr[i], &type); // size of ID
+		ptr[i] += x << bcf_type_shift[type]; // skip ID
+		x = bcf_dec_size(ptr[i], &ptr[i], &type); // size of REF
+		ptr[i] += x << bcf_type_shift[type]; // skip REF
+		l[i] = bcf_dec_size(ptr[i], &ptr[i], &type); // size of ALT1
+	}
+	if (l[0] != l[1]) return l[0] - l[1];
+	return strncmp((char*)ptr[0], (char*)ptr[1], l[0]);
 }
 
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
@@ -169,52 +190,66 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	bgt_gen_gt(bgt->h_sub, b, bgt->n_sub, a);
 	return ret;
 }
-/*
-static inline void bgt_copy_raw(int m, bgt_raw1_t *dst, const bgt_raw1_t *src)
+
+static void append_to_pos(bgt_pos_t *p, const bcf1_t *b0, int m, const uint8_t **a)
 {
-	if (!dst->copied) {
-		dst->bit[0] = (uint8_t*)malloc(m);
-		dst->bit[1] = (uint8_t*)malloc(m);
-		dst->copied = 1;
+	bgt_rec_t *r;
+	if (p->n_b == p->m_b) {
+		int oldm = p->m_b;
+		p->m_b = p->m_b? p->m_b<<1 : 4;
+		p->b = (bgt_rec_t*)realloc(p->b, p->m_b * sizeof(bgt_rec_t));
+		memset(&p->b[oldm], 0, (p->m_b - oldm) & sizeof(bgt_rec_t));
 	}
-	memcpy(dst->bit[0], src->bit[0], m);
-	memcpy(dst->bit[1], src->bit[1], m);
-	dst->row = src->row;
-	bcf_copy(dst->b, src->b);
+	r = &p->b[p->n_b++];
+	if (r->b0 == 0) r->b0 = bcf_init1();
+	bcf_copy(r->b0, b0);
+	r->a[0] = (uint8_t*)realloc(r->a[0], m);
+	r->a[1] = (uint8_t*)realloc(r->a[1], m);
+	memcpy(r->a[0], a[0], m);
+	memcpy(r->a[1], a[1], m);
 }
 
-int bgt_rawpos_read(bgt_t *bgt, bgt_rawpos_t *p)
+int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
 {
 	p->n_b = 0;
-	if (p->next.row < 0) return -1; // end-of-file
-	if (p->next.b == 0 && bgt_read_raw(bgt, &p->next, 0) < 0) // this is the first call
-		return -2;
-	p->rid = p->next.b->rid, p->pos = p->next.b->pos;
+	if (p->finished || bgt->n_sub == 0) return -1; // end-of-file
+	if (p->row < 0 && (p->row = bgt_read_core(bgt)) < 0) {
+		p->finished = 1;
+		return p->row;
+	}
+	p->rid = bgt->b0->rid, p->pos = bgt->b0->pos;
 	do {
-		if (p->n_b == p->m_b) {
-			int i, oldm = p->m_b;
-			p->m_b = p->m_b? p->m_b<<1 : 4;
-			p->b = (bgt_raw1_t*)realloc(p->b, p->m_b * sizeof(bgt_raw1_t));
-			memset(&p->b[oldm], 0, (p->m_b - oldm) * sizeof(bgt_raw1_t));
-			for (i = oldm; i < p->m_b; ++i) p->b[i].b = bcf_init1();
-		}
-		bgt_copy_raw(bgt->n_sub, &p->b[p->n_b++], &p->next);
-		if (bgt_read_raw(bgt, &p->next, 0) < 0)
-			p->next.row = -1;
-	} while (p->next.row >= 0 && p->next.b->rid == p->rid && p->next.b->pos == p->pos);
+		const uint8_t **a;
+		pbf_seek(bgt->pb, p->row);
+		a = pbf_read(bgt->pb);
+		append_to_pos(p, bgt->b0, bgt->n_sub, a);
+		p->row = bgt_read_core(bgt); // read the next b0
+	} while (p->row >= 0 && bgt->b0->rid == p->rid && bgt->b0->pos == p->pos);
+	if (p->row < 0) p->finished = 1;
 	return p->n_b;
 }
 
-bgtm_t *bgtm_open(int n_files, char **fns)
+bgtm_t *bgtm_open(int n_files, char *const*fns)
 {
 	bgtm_t *bm;
-	int i;
+	int i, j, k, n_samples = 0;
+	char **samples;
 	bm = (bgtm_t*)calloc(1, sizeof(bgtm_t));
 	bm->n_bgt = n_files;
 	bm->bgt = (bgt_t**)calloc(bm->n_bgt, sizeof(void*));
-	for (i = 0; i < bm->n_bgt; ++i)
+	for (i = 0; i < bm->n_bgt; ++i) {
 		bm->bgt[i] = bgt_open(fns[i]);
-	bm->rp = (bgt_rawpos_t*)calloc(bm->n_bgt, sizeof(bgt_rawpos_t));
+		n_samples += bm->bgt[i]->n_samples;
+	}
+	samples = (char**)malloc(n_samples * sizeof(char*));
+	for (i = k = 0; i < bm->n_bgt; ++i) {
+		bgt_t *bgt = bm->bgt[i];
+		for (j = 0; j < bgt->n_samples; ++j)
+			samples[k++] = bgt->samples[j];
+	}
+	bgtm_set_samples(bm, n_samples, samples);
+	free(samples);
+	bm->p = (bgt_pos_t*)calloc(bm->n_bgt, sizeof(bgt_pos_t));
 	return bm;
 }
 
@@ -227,13 +262,50 @@ void bgtm_close(bgtm_t *bm)
 	free(bm);
 }
 
-int bgtm_read_raw(bgtm_t *bm)
+void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
+{
+	int i, j;
+	kstring_t h = {0,0,0};
+	bcf_hdr_t *h0;
+	if (bm->n_bgt == 0) return;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_set_samples(bm->bgt[i], n, samples);
+
+	h0 = bm->bgt[0]->h0; // FIXME: test if headers are consistent
+	kputs("##fileformat=VCFv4.1\n", &h);
+	kputs("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n", &h);
+	for (i = 0; i < h0->n[BCF_DT_CTG]; ++i)
+		ksprintf(&h, "##contig=<ID=%s,length=%d>\n", h0->id[BCF_DT_CTG][i].key, h0->id[BCF_DT_CTG][i].val->info[0]);
+	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT", &h);
+	for (i = 0; i < bm->n_bgt; ++i) {
+		bgt_t *bgt = bm->bgt[i];
+		for (j = 0; j < bgt->n_sub; ++j) {
+			kputc('\t', &h);
+			kputs(bgt->samples[bgt->sub[j]], &h);
+		}
+	}
+	if (bm->h) bcf_hdr_destroy(bm->h);
+	bm->h = bcf_hdr_init();
+	bm->h->l_text = h.l + 1, bm->h->m_text = h.m, bm->h->text = h.s;
+	bcf_hdr_parse(bm->h);
+}
+
+int bgtm_set_region(bgtm_t *bm, const char *reg)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_set_region(bm->bgt[i], reg);
+	return 0;
+}
+
+/*
+int bgtm_read(bgtm_t *bm)
 {
 	int i, n_rest = 0;
 	for (i = 0; i < bm->n_bgt; ++i) {
-		if (bm->rp[i].n_b == 0)
-			bgt_rawpos_read(bm->bgt[i], &bm->rp[i]);
-		n_rest += bm->rp[i].n_b;
+		if (bm->p[i].n_b == 0)
+			bgt_rawpos_read(bm->bgt[i], &bm->p[i]);
+		n_rest += bm->p[i].n_b;
 	}
 	if (n_rest == 0) return -1;
 	// search for the smallest allele

@@ -20,21 +20,21 @@ typedef struct {
 } bgt_t;
 
 typedef struct {
-	bcf1_t *b;
-	uint8_t *bit[2];
-	int row, copied;
-} bgt_raw1_t;
+	bcf1_t *b0;
+	uint8_t *a[2];
+} bgt_rec_t;
 
 typedef struct {
 	int rid, pos;
-	int m_b, n_b;
-	bgt_raw1_t *b, next;
-} bgt_rawpos_t;
+	int m_b, n_b, row, finished;
+	bgt_rec_t *b;
+} bgt_pos_t;
 
 typedef struct {
 	int n_bgt;
 	bgt_t **bgt;
-	bgt_rawpos_t *rp;
+	bgt_pos_t *p;
+	bcf_hdr_t *h;
 } bgtm_t;
 
 bgt_t *bgt_open(const char *prefix);
@@ -43,7 +43,9 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples);
 int bgt_set_region(bgt_t *bgt, const char *reg);
 int bgt_read(bgt_t *bgt, bcf1_t *b);
 
-bgtm_t *bgtm_open(int n_files, char **fns);
+bgtm_t *bgtm_open(int n_files, char *const*fns);
 void bgtm_close(bgtm_t *bm);
+void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
+int bgtm_set_region(bgtm_t *bm, const char *reg);
 
 #endif
