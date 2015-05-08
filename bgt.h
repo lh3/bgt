@@ -31,10 +31,11 @@ typedef struct {
 } bgt_pos_t;
 
 typedef struct {
-	int n_bgt;
+	int n_bgt, n_sub;
 	bgt_t **bgt;
 	bgt_pos_t *p;
 	bcf_hdr_t *h;
+	uint8_t *a[2];
 } bgtm_t;
 
 bgt_t *bgt_open(const char *prefix);

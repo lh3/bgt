@@ -265,8 +265,9 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	for (i = 0; i < h0->n[BCF_DT_CTG]; ++i)
 		ksprintf(&h, "##contig=<ID=%s,length=%d>\n", h0->id[BCF_DT_CTG][i].key, h0->id[BCF_DT_CTG][i].val->info[0]);
 	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT", &h);
-	for (i = 0; i < bm->n_bgt; ++i) {
+	for (i = bm->n_sub = 0; i < bm->n_bgt; ++i) {
 		bgt_t *bgt = bm->bgt[i];
+		bm->n_sub += bgt->n_sub;
 		for (j = 0; j < bgt->n_sub; ++j) {
 			kputc('\t', &h);
 			kputs(bgt->samples[bgt->sub[j]], &h);
@@ -276,6 +277,8 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	bm->h = bcf_hdr_init();
 	bm->h->l_text = h.l + 1, bm->h->m_text = h.m, bm->h->text = h.s;
 	bcf_hdr_parse(bm->h);
+	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_sub);
+	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_sub);
 }
 
 int bgtm_set_region(bgtm_t *bm, const char *reg)
@@ -286,22 +289,57 @@ int bgtm_set_region(bgtm_t *bm, const char *reg)
 	return 0;
 }
 
-int bgtm_read(bgtm_t *bm, bcf1_t *b)
+static inline void swap_rec(bgt_rec_t *a, bgt_rec_t *b)
 {
-	return -1;
+	bgt_rec_t t;
+	t = *a, *a = *b, *b = t;
 }
 
-/*
-int bgtm_read(bgtm_t *bm)
+int bgtm_read(bgtm_t *bm, bcf1_t *b)
 {
-	int i, n_rest = 0;
-	for (i = 0; i < bm->n_bgt; ++i) {
+	int i, j, off = 0, n_rest = 0;
+	bcf1_t *min_b0 = 0;
+	// fill the buffer
+	for (i = n_rest = 0; i < bm->n_bgt; ++i) {
 		if (bm->p[i].n_b == 0)
-			bgt_rawpos_read(bm->bgt[i], &bm->p[i]);
+			bgt_read_pos(bm->bgt[i], &bm->p[i]);
 		n_rest += bm->p[i].n_b;
 	}
 	if (n_rest == 0) return -1;
 	// search for the smallest allele
+	for (i = 0; i < bm->n_bgt; ++i) {
+		bgt_pos_t *p = &bm->p[i];
+		for (j = 0; j < p->n_b; ++j)
+			if (min_b0 == 0 || bcfcmp(min_b0, p->b[j].b0) < 0)
+				min_b0 = p->b[j].b0;
+	}
+	bcfcpy(b, min_b0);
+	// generate bm->a
+	for (i = 0; i < bm->n_bgt; ++i) {
+		bgt_pos_t *p = &bm->p[i];
+		bgt_t *bgt = bm->bgt[i];
+		bgt_rec_t q;
+		int n_min = 0, k;
+		if (bgt->n_sub == 0) continue;
+		for (j = k = 0; j < p->n_b; ++j) {
+			if (bcfcmp(b, p->b[j].b0) == 0) { // then copy out
+				q = p->b[j];
+				++n_min;
+			} else {
+				if (j != k) swap_rec(&p->b[j], &p->b[k]);
+				++k;
+			}
+		}
+		p->n_b = k;
+		if (n_min) { // copy; when there are multiple, we only copy the last one
+			memcpy(bm->a[0] + off, q.a[0], bgt->n_sub<<1);
+			memcpy(bm->a[1] + off, q.a[1], bgt->n_sub<<1);
+		} else { // add missing values
+			memset(bm->a[0] + off, 0, bgt->n_sub<<1);
+			memset(bm->a[1] + off, 1, bgt->n_sub<<1);
+		}
+		off += bgt->n_sub<<1;
+	}
+//	bgt_gen_gt(bm->h, b, bm->n_sub, (const uint8_t**)bm->a);
 	return 0;
 }
-*/
