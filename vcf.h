@@ -200,7 +200,7 @@ extern "C" {
 	void bcf_fmt_array(kstring_t *s, int n, int type, void *data);
 	uint8_t *bcf_fmt_sized_array(kstring_t *s, uint8_t *ptr);
 
-	void bcf_enc_vchar(kstring_t *s, int l, char *a);
+	void bcf_enc_vchar(kstring_t *s, int l, const char *a);
 	void bcf_enc_vint(kstring_t *s, int n, int32_t *a, int wsize);
 	void bcf_enc_vfloat(kstring_t *s, int n, float *a);
 	
@@ -244,6 +244,7 @@ extern "C" {
 	char *bcf_get_alt1(const bcf1_t *b, int *len);
 	void bcfcpy(bcf1_t *dst, const bcf1_t *src);
 	int bcfcmp(const bcf1_t *a, const bcf1_t *b);
+	void bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2);
 
 #ifdef __cplusplus
 }

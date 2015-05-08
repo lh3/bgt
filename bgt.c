@@ -107,11 +107,14 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 		t[i<<1|0] = bgt->sub[i]<<1|0, t[i<<1|1] = bgt->sub[i]<<1|1;
 	pbf_subset(bgt->pb, bgt->n_sub<<1, t);
 	free(t);
+
+	bgt->b0->shared.l = 0; // mark b0 unread
 }
 
 int bgt_set_region(bgt_t *bgt, const char *reg)
 {
 	bgt->itr = bcf_itr_querys(bgt->idx, bgt->h0, reg);
+	bgt->b0->shared.l = 0; // mark b0 unread
 	return bgt->itr? 0 : -1;
 }
 
@@ -187,7 +190,7 @@ int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
 {
 	p->n_b = 0;
 	if (p->finished || bgt->n_sub == 0) return -1; // end-of-file or nothing to read
-	if (p->row < 0 && (p->row = bgt_read_core(bgt)) < 0) {
+	if (bgt->b0->shared.l == 0 && (p->row = bgt_read_core(bgt)) < 0) {
 		p->finished = 1;
 		return p->row;
 	}
@@ -196,7 +199,7 @@ int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
 		const uint8_t **a;
 		pbf_seek(bgt->pb, p->row);
 		a = pbf_read(bgt->pb);
-		append_to_pos(p, bgt->b0, bgt->n_sub, a);
+		append_to_pos(p, bgt->b0, bgt->n_sub<<1, a);
 		p->row = bgt_read_core(bgt); // read the next b0
 	} while (p->row >= 0 && bgt->b0->rid == p->rid && bgt->b0->pos == p->pos);
 	if (p->row < 0) p->finished = 1;
@@ -297,8 +300,8 @@ static inline void swap_rec(bgt_rec_t *a, bgt_rec_t *b)
 
 int bgtm_read(bgtm_t *bm, bcf1_t *b)
 {
-	int i, j, off = 0, n_rest = 0;
-	bcf1_t *min_b0 = 0;
+	int i, j, off = 0, n_rest = 0, max_allele = 0;
+	bcf1_t *b0 = 0;
 	// fill the buffer
 	for (i = n_rest = 0; i < bm->n_bgt; ++i) {
 		if (bm->p[i].n_b == 0)
@@ -309,11 +312,19 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	// search for the smallest allele
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];
-		for (j = 0; j < p->n_b; ++j)
-			if (min_b0 == 0 || bcfcmp(min_b0, p->b[j].b0) < 0)
-				min_b0 = p->b[j].b0;
+		for (j = 0; j < p->n_b; ++j) {
+			if (b0) {
+				int c;
+				c = bcfcmp(b0, p->b[j].b0);
+				if (c < 0) b0 = p->b[j].b0, max_allele = b0->n_allele;
+				else if (c == 0)
+					max_allele = p->b[j].b0->n_allele > max_allele? p->b[j].b0->n_allele : max_allele;
+			} else b0 = p->b[j].b0, max_allele = b0->n_allele;
+		}
 	}
-	bcfcpy(b, min_b0);
+	assert(b0 && max_allele >= 2);
+	bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
+	return 0;
 	// generate bm->a
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];

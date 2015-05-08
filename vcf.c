@@ -463,7 +463,7 @@ void bcf_enc_vfloat(kstring_t *s, int n, float *a)
 	kputsn((char*)a, n << 2, s);
 }
 
-void bcf_enc_vchar(kstring_t *s, int l, char *a)
+void bcf_enc_vchar(kstring_t *s, int l, const char *a)
 {
 	bcf_enc_size(s, l, BCF_BT_CHAR);
 	kputsn(a, l, s);
@@ -1117,19 +1117,27 @@ void bcfcpy(bcf1_t *dst, const bcf1_t *src)
 	kputsn(src->indiv.s, src->indiv.l, &dst->indiv);
 }
 
-char *bcf_get_alt1(const bcf1_t *b, int *len)
+void bcf_get_ref_alt1(const bcf1_t *b, int *l_ref, char **ref, int *l_alt, char **alt)
 {
 	int x, type;
 	uint8_t *ptr;
-	*len = 0;
-	if (b->shared.l == 0) return 0;
+	*ref = *alt = 0; *l_ref = *l_alt = 0;
 	ptr = (uint8_t*)b->shared.s;
 	x = bcf_dec_size(ptr, &ptr, &type); // size of ID
 	ptr += x << bcf_type_shift[type]; // skip ID
 	x = bcf_dec_size(ptr, &ptr, &type); // size of REF
+	*l_ref = x, *ref = (char*)ptr;
 	ptr += x << bcf_type_shift[type]; // skip REF
-	*len = bcf_dec_size(ptr, &ptr, &type); // size of ALT1
-	return (char*)ptr;
+	*l_alt = bcf_dec_size(ptr, &ptr, &type); // size of ALT1
+	*alt = (char*)ptr;
+}
+
+char *bcf_get_alt1(const bcf1_t *b, int *len)
+{
+	int l_ref, l_alt;
+	char *ref, *alt;
+	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
+	return alt;
 }
 
 int bcfcmp(const bcf1_t *a, const bcf1_t *b) // FIXME: segfault when a or b is empty; also, what happens when there are not ALT alleles?
@@ -1143,4 +1151,21 @@ int bcfcmp(const bcf1_t *a, const bcf1_t *b) // FIXME: segfault when a or b is e
 	ptr[1] = bcf_get_alt1(b, &l[1]);
 	if (l[0] != l[1]) return l[0] - l[1];
 	return strncmp(ptr[0], ptr[1], l[0]);
+}
+
+void bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)
+{
+	int l_ref, l_alt;
+	char *ref, *alt;
+	bcf_get_ref_alt1(b0, &l_ref, &ref, &l_alt, &alt);
+	b->rid = b0->rid, b->pos = b0->pos, b->rlen = b0->rlen;
+	b->qual = 0, b->n_info = b->n_fmt = b->n_sample = 0;
+	b->n_allele = alt2? 1 : 2;
+	b->shared.l = b->indiv.l = 0;
+	bcf_enc_size(&b->shared, 0, BCF_BT_CHAR); // empty ID
+	bcf_enc_vchar(&b->shared, l_ref, ref); // copy REF
+	bcf_enc_vchar(&b->shared, l_alt, alt); // copy the first ALT
+	if (alt2) bcf_enc_vchar(&b->shared, strlen(alt2), alt2); // add <M> if requested
+	bcf_enc_vint(&b->shared, 0, 0, -1); // empty FILTER
+	// no need to add INFO when b->n_info==0
 }
