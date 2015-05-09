@@ -1170,3 +1170,14 @@ int bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)
 	b->unpacked = 0;
 	return l_ref;
 }
+
+int bcf_append_info_int(const bcf_hdr_t *h, bcf1_t *b, const char *key, int32_t val)
+{
+	int id;
+	id = bcf_id2int(h, BCF_DT_ID, key);
+	if (id < 0) return -1;
+	++b->n_info;
+	bcf_enc_int1(&b->shared, id);
+	bcf_enc_vint(&b->shared, 1, &val, -1);
+	return 0;
+}

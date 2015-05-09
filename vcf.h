@@ -245,6 +245,7 @@ extern "C" {
 	void bcfcpy(bcf1_t *dst, const bcf1_t *src);
 	int bcfcmp(const bcf1_t *a, const bcf1_t *b);
 	int bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2);
+	int bcf_append_info_int(const bcf_hdr_t *h, bcf1_t *b, const char *key, int32_t val);
 
 #ifdef __cplusplus
 }

@@ -75,13 +75,9 @@ int main_ucf2bgt(int argc, char *argv[])
 	while (vcf_read1(in, h, b) >= 0) {
 		int i, k, j;
 		bcf_fmt_t *gt;
-		int32_t key_id, val = n;
 
 		// insert "_row" to INFO
-		key_id = bcf_id2int(h, BCF_DT_ID, "_row");
-		++b->n_info;
-		bcf_enc_int1(&b->shared, key_id);
-		bcf_enc_vint(&b->shared, 1, &val, -1);
+		bcf_append_info_int(h, b, "_row", n);
 
 		// write genotypes
 		bcf_unpack(b, BCF_UN_FMT);

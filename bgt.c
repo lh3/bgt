@@ -330,13 +330,8 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	}
 	assert(b0 && max_allele >= 2);
 	l_ref = bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
-	if (l_ref != b->rlen) {
-		int32_t id, val = b->pos + b->rlen;
-		id = bcf_id2int(bm->h_out, BCF_DT_ID, "END");
-		++b->n_info;
-		bcf_enc_int1(&b->shared, id);
-		bcf_enc_vint(&b->shared, 1, &val, -1);
-	}
+	if (l_ref != b->rlen)
+		bcf_append_info_int(bm->h_out, b, "END", b->pos + b->rlen);
 	// generate bm->a
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];
