@@ -426,7 +426,7 @@ void vcf_hdr_write(htsFile *fp, const bcf_hdr_t *h)
  *** Typed value I/O ***
  ***********************/
 
-void bcf_enc_vint(kstring_t *s, int n, int32_t *a, int wsize)
+void bcf_enc_vint(kstring_t *s, int n, const int32_t *a, int wsize)
 {
 	int32_t max = INT32_MIN + 1, min = INT32_MAX;
 	int i;
@@ -1171,13 +1171,13 @@ int bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)
 	return l_ref;
 }
 
-int bcf_append_info_int(const bcf_hdr_t *h, bcf1_t *b, const char *key, int32_t val)
+int bcf_append_info_ints(const bcf_hdr_t *h, bcf1_t *b, const char *key, int n, const int32_t *vals)
 {
 	int id;
 	id = bcf_id2int(h, BCF_DT_ID, key);
 	if (id < 0) return -1;
 	++b->n_info;
 	bcf_enc_int1(&b->shared, id);
-	bcf_enc_vint(&b->shared, 1, &val, -1);
+	bcf_enc_vint(&b->shared, n, vals, -1);
 	return 0;
 }

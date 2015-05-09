@@ -330,8 +330,10 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	}
 	assert(b0 && max_allele >= 2);
 	l_ref = bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
-	if (l_ref != b->rlen)
-		bcf_append_info_int(bm->h_out, b, "END", b->pos + b->rlen);
+	if (l_ref != b->rlen) {
+		int32_t val = b->pos + b->rlen;
+		bcf_append_info_ints(bm->h_out, b, "END", 1, &val);
+	}
 	// generate bm->a
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];
@@ -357,6 +359,16 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 			memset(bm->a[1] + off, 1, bgt->n_out<<1);
 		}
 		off += bgt->n_out<<1;
+	}
+	{
+		int32_t cnt[4], an, ac[2];
+		memset(cnt, 0, 4 * sizeof(int));
+		for (i = 0; i < bm->n_out<<1; ++i)
+			++cnt[bm->a[1][i]<<1 | bm->a[0][i]];
+		an = cnt[0] + cnt[1] + cnt[3];
+		ac[0] = cnt[1], ac[1] = cnt[3];
+		bcf_append_info_ints(bm->h_out, b, "AN", 1, &an);
+		bcf_append_info_ints(bm->h_out, b, "AC", b->n_allele - 1, ac);
 	}
 	bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
 	return 0;

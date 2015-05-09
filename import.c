@@ -74,10 +74,11 @@ int main_ucf2bgt(int argc, char *argv[])
 	b = bcf_init1();
 	while (vcf_read1(in, h, b) >= 0) {
 		int i, k, j;
+		int32_t val = n;
 		bcf_fmt_t *gt;
 
 		// insert "_row" to INFO
-		bcf_append_info_int(h, b, "_row", n);
+		bcf_append_info_ints(h, b, "_row", 1, &val);
 
 		// write genotypes
 		bcf_unpack(b, BCF_UN_FMT);
