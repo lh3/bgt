@@ -236,9 +236,20 @@ bgtm_t *bgtm_open(int n_files, char *const*fns)
 
 void bgtm_close(bgtm_t *bm)
 {
-	int i;
-	for (i = 0; i < bm->n_bgt; ++i)
+	int i, j;
+	bcf_hdr_destroy(bm->h);
+	free(bm->a[0]); free(bm->a[1]);
+	for (i = 0; i < bm->n_bgt; ++i) {
+		bgt_pos_t *p = &bm->p[i];
+		for (j = 0; j < p->m_b; ++j) {
+			if (p->b[j].b0 == 0) continue;
+			bcf_destroy1(p->b[j].b0);
+			free(p->b[j].a[0]); free(p->b[j].a[1]);
+		}
+		free(p->b);
 		bgt_close(bm->bgt[i]);
+	}
+	free(bm->p);
 	free(bm->bgt);
 	free(bm);
 }
@@ -249,7 +260,6 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kstring_t h = {0,0,0};
 	bcf_hdr_t *h0;
 	if (bm->n_bgt == 0) return;
-	fprintf(stderr, "++ %d\n", n);
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_set_samples(bm->bgt[i], n, samples);
 
@@ -326,6 +336,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		bgt_rec_t q, swap;
 		int n_min = 0, end = p->n_b - 1;
 		if (bgt->n_sub == 0) continue;
+		memset(&q, 0, sizeof(bgt_rec_t)); // suppress a gcc warning
 		for (j = 0; j <= end; ++j) {
 			if (bcfcmp(b, p->b[j].b0) == 0) { // then swap to the end
 				q = p->b[j];
