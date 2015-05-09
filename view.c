@@ -53,12 +53,11 @@ int main_view(int argc, char *argv[])
 	if (out_bcf) strcat(modew, "b");
 	sprintf(modew + strlen(modew), "%d", clevel);
 	out = hts_open("-", modew, 0);
-	vcf_hdr_write(out, bgt? bgt->h_sub : bm->h);
+	vcf_hdr_write(out, bgt? bgt->h_out : bm->h_out);
 
 	b = bcf_init1();
-	while (read1(bgt, bm, b) >= 0) {
-		vcf_write1(out, bgt? bgt->h_sub : bm->h, b);
-	}
+	while (read1(bgt, bm, b) >= 0)
+		vcf_write1(out, bgt? bgt->h_out : bm->h_out, b);
 	bcf_destroy1(b);
 
 	hts_close(out);

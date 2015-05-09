@@ -8,6 +8,7 @@ typedef struct {
 	int n_samples;
 	char **samples;
 	void *h_samples; // hash table
+
 	pbf_t *pb;
 	htsFile *bcf;
 	bcf_hdr_t *h0; // site-only BCF header
@@ -15,8 +16,8 @@ typedef struct {
 	hts_idx_t *idx; // BCF index
 	hts_itr_t *itr;
 
-	int n_sub, *sub;
-	bcf_hdr_t *h_sub;
+	int n_out, *out;
+	bcf_hdr_t *h_out;
 } bgt_t;
 
 typedef struct {
@@ -31,10 +32,10 @@ typedef struct {
 } bgt_pos_t;
 
 typedef struct {
-	int n_bgt, n_sub;
+	int n_bgt, n_out;
 	bgt_t **bgt;
 	bgt_pos_t *p;
-	bcf_hdr_t *h;
+	bcf_hdr_t *h_out;
 	uint8_t *a[2];
 } bgtm_t;
 

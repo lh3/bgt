@@ -57,8 +57,8 @@ void bgt_close(bgt_t *bgt)
 {
 	int i;
 	if (bgt->b0) bcf_destroy1(bgt->b0);
-	free(bgt->sub);
-	if (bgt->h_sub) bcf_hdr_destroy(bgt->h_sub);
+	free(bgt->out);
+	if (bgt->h_out) bcf_hdr_destroy(bgt->h_out);
 	hts_itr_destroy(bgt->itr);
 	hts_idx_destroy(bgt->idx);
 	bcf_hdr_destroy(bgt->h0);
@@ -77,35 +77,35 @@ void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 	const khash_t(s2i) *h = (khash_t(s2i)*)bgt->h_samples;
 	kstring_t str = {0,0,0};
 
-	bgt->sub = (int*)realloc(bgt->sub, n * sizeof(int));
+	bgt->out = (int*)realloc(bgt->out, n * sizeof(int));
 	for (i = 0; i < n; ++i) {
 		khint_t k;
 		k = kh_get(s2i, h, samples[i]);
-		bgt->sub[i] = k != kh_end(h)? kh_val(h, k) : bgt->n_samples;
+		bgt->out[i] = k != kh_end(h)? kh_val(h, k) : bgt->n_samples;
 	}
-	radix_sort_i(bgt->sub, bgt->sub + n);
-	for (i = bgt->n_sub = 1, last = bgt->sub[0]; i < n; ++i) // remove unidentified or duplicated samples
-		if (bgt->sub[i] != bgt->n_samples && bgt->sub[i] != last)
-			bgt->sub[bgt->n_sub++] = bgt->sub[i], last = bgt->sub[i];
-	if (bgt->n_sub == 0) return;
+	radix_sort_i(bgt->out, bgt->out + n);
+	for (i = bgt->n_out = 1, last = bgt->out[0]; i < n; ++i) // remove unidentified or duplicated samples
+		if (bgt->out[i] != bgt->n_samples && bgt->out[i] != last)
+			bgt->out[bgt->n_out++] = bgt->out[i], last = bgt->out[i];
+	if (bgt->n_out == 0) return;
 
-	if (bgt->h_sub) bcf_hdr_destroy(bgt->h_sub);
-	bgt->h_sub = bcf_hdr_init();
+	if (bgt->h_out) bcf_hdr_destroy(bgt->h_out);
+	bgt->h_out = bcf_hdr_init();
 	kputsn(bgt->h0->text, bgt->h0->l_text, &str);
 	if (str.s[str.l-1] == 0) --str.l;
 	kputs("\tFORMAT", &str);
-	for (i = 0; i < bgt->n_sub; ++i) {
+	for (i = 0; i < bgt->n_out; ++i) {
 		kputc('\t', &str);
-		kputs(bgt->samples[bgt->sub[i]], &str);
+		kputs(bgt->samples[bgt->out[i]], &str);
 	}
-	bgt->h_sub->text = str.s;
-	bgt->h_sub->l_text = str.l + 1; // including the last NULL
-	bcf_hdr_parse(bgt->h_sub);
+	bgt->h_out->text = str.s;
+	bgt->h_out->l_text = str.l + 1; // including the last NULL
+	bcf_hdr_parse(bgt->h_out);
 
-	t = (int*)malloc(bgt->n_sub * 2 * sizeof(int));
-	for (i = 0; i < bgt->n_sub; ++i)
-		t[i<<1|0] = bgt->sub[i]<<1|0, t[i<<1|1] = bgt->sub[i]<<1|1;
-	pbf_subset(bgt->pb, bgt->n_sub<<1, t);
+	t = (int*)malloc(bgt->n_out * 2 * sizeof(int));
+	for (i = 0; i < bgt->n_out; ++i)
+		t[i<<1|0] = bgt->out[i]<<1|0, t[i<<1|1] = bgt->out[i]<<1|1;
+	pbf_subset(bgt->pb, bgt->n_out<<1, t);
 	free(t);
 
 	bgt->b0->shared.l = 0; // mark b0 unread
@@ -160,7 +160,7 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	pbf_seek(bgt->pb, ret);
 	a = pbf_read(bgt->pb);
 	bcfcpy(b, bgt->b0);
-	bgt_gen_gt(bgt->h_sub, b, bgt->n_sub, a);
+	bgt_gen_gt(bgt->h_out, b, bgt->n_out, a);
 	return ret;
 }
 
@@ -189,7 +189,7 @@ static void append_to_pos(bgt_pos_t *p, const bcf1_t *b0, int m, const uint8_t *
 int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
 {
 	p->n_b = 0;
-	if (p->finished || bgt->n_sub == 0) return -1; // end-of-file or nothing to read
+	if (p->finished || bgt->n_out == 0) return -1; // end-of-file or nothing to read
 	if (bgt->b0->shared.l == 0 && (p->row = bgt_read_core(bgt)) < 0) {
 		p->finished = 1;
 		return p->row;
@@ -199,7 +199,7 @@ int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
 		const uint8_t **a;
 		pbf_seek(bgt->pb, p->row);
 		a = pbf_read(bgt->pb);
-		append_to_pos(p, bgt->b0, bgt->n_sub<<1, a);
+		append_to_pos(p, bgt->b0, bgt->n_out<<1, a);
 		p->row = bgt_read_core(bgt); // read the next b0
 	} while (p->row >= 0 && bgt->b0->rid == p->rid && bgt->b0->pos == p->pos);
 	if (p->row < 0) p->finished = 1;
@@ -237,7 +237,7 @@ bgtm_t *bgtm_open(int n_files, char *const*fns)
 void bgtm_close(bgtm_t *bm)
 {
 	int i, j;
-	bcf_hdr_destroy(bm->h);
+	bcf_hdr_destroy(bm->h_out);
 	free(bm->a[0]); free(bm->a[1]);
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];
@@ -267,6 +267,7 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kputs("##fileformat=VCFv4.1\n", &h);
 	kputs("##INFO=<ID=AC,Number=A,Type=String,Description=\"Count of alternate alleles\">\n", &h);
 	kputs("##INFO=<ID=AN,Number=A,Type=String,Description=\"Count of total alleles\">\n", &h);
+	kputs("##INFO=<ID=END,Number=1,Type=Integer,Description=\"Ending position\">\n", &h);
 	kputs("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n", &h);
 	kputs("##ALT=<ID=M,Description=\"Multi-allele\">\n", &h);
 	kputs("##ALT=<ID=DEL,Description=\"Deletion\">\n", &h);
@@ -279,20 +280,20 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	for (i = 0; i < h0->n[BCF_DT_CTG]; ++i)
 		ksprintf(&h, "##contig=<ID=%s,length=%d>\n", h0->id[BCF_DT_CTG][i].key, h0->id[BCF_DT_CTG][i].val->info[0]);
 	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT", &h);
-	for (i = bm->n_sub = 0; i < bm->n_bgt; ++i) {
+	for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
 		bgt_t *bgt = bm->bgt[i];
-		bm->n_sub += bgt->n_sub;
-		for (j = 0; j < bgt->n_sub; ++j) {
+		bm->n_out += bgt->n_out;
+		for (j = 0; j < bgt->n_out; ++j) {
 			kputc('\t', &h);
-			kputs(bgt->samples[bgt->sub[j]], &h);
+			kputs(bgt->samples[bgt->out[j]], &h);
 		}
 	}
-	if (bm->h) bcf_hdr_destroy(bm->h);
-	bm->h = bcf_hdr_init();
-	bm->h->l_text = h.l + 1, bm->h->m_text = h.m, bm->h->text = h.s;
-	bcf_hdr_parse(bm->h);
-	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_sub<<1);
-	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_sub<<1);
+	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
+	bm->h_out = bcf_hdr_init();
+	bm->h_out->l_text = h.l + 1, bm->h_out->m_text = h.m, bm->h_out->text = h.s;
+	bcf_hdr_parse(bm->h_out);
+	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_out<<1);
+	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_out<<1);
 }
 
 int bgtm_set_region(bgtm_t *bm, const char *reg)
@@ -305,7 +306,7 @@ int bgtm_set_region(bgtm_t *bm, const char *reg)
 
 int bgtm_read(bgtm_t *bm, bcf1_t *b)
 {
-	int i, j, off = 0, n_rest = 0, max_allele = 0;
+	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref;
 	bcf1_t *b0 = 0;
 	// fill the buffer
 	for (i = n_rest = 0; i < bm->n_bgt; ++i) {
@@ -328,14 +329,21 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		}
 	}
 	assert(b0 && max_allele >= 2);
-	bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
+	l_ref = bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
+	if (l_ref != b->rlen) {
+		int32_t id, val = b->pos + b->rlen;
+		id = bcf_id2int(bm->h_out, BCF_DT_ID, "END");
+		++b->n_info;
+		bcf_enc_int1(&b->shared, id);
+		bcf_enc_vint(&b->shared, 1, &val, -1);
+	}
 	// generate bm->a
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];
 		bgt_t *bgt = bm->bgt[i];
 		bgt_rec_t q, swap;
 		int n_min = 0, end = p->n_b - 1;
-		if (bgt->n_sub == 0) continue;
+		if (bgt->n_out == 0) continue;
 		memset(&q, 0, sizeof(bgt_rec_t)); // suppress a gcc warning
 		for (j = 0; j <= end; ++j) {
 			if (bcfcmp(b, p->b[j].b0) == 0) { // then swap to the end
@@ -347,14 +355,14 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		}
 		p->n_b = end + 1;
 		if (n_min) { // copy; when there are multiple, we only copy the last one
-			memcpy(bm->a[0] + off, q.a[0], bgt->n_sub<<1);
-			memcpy(bm->a[1] + off, q.a[1], bgt->n_sub<<1);
+			memcpy(bm->a[0] + off, q.a[0], bgt->n_out<<1);
+			memcpy(bm->a[1] + off, q.a[1], bgt->n_out<<1);
 		} else { // add missing values
-			memset(bm->a[0] + off, 0, bgt->n_sub<<1);
-			memset(bm->a[1] + off, 1, bgt->n_sub<<1);
+			memset(bm->a[0] + off, 0, bgt->n_out<<1);
+			memset(bm->a[1] + off, 1, bgt->n_out<<1);
 		}
-		off += bgt->n_sub<<1;
+		off += bgt->n_out<<1;
 	}
-	bgt_gen_gt(bm->h, b, bm->n_sub, (const uint8_t**)bm->a);
+	bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
 	return 0;
 }

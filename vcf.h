@@ -244,7 +244,7 @@ extern "C" {
 	char *bcf_get_alt1(const bcf1_t *b, int *len);
 	void bcfcpy(bcf1_t *dst, const bcf1_t *src);
 	int bcfcmp(const bcf1_t *a, const bcf1_t *b);
-	void bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2);
+	int bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2);
 
 #ifdef __cplusplus
 }

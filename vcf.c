@@ -1153,7 +1153,7 @@ int bcfcmp(const bcf1_t *a, const bcf1_t *b) // FIXME: segfault when a or b is e
 	return strncmp(ptr[0], ptr[1], l[0]);
 }
 
-void bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)
+int bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)
 {
 	int l_ref, l_alt;
 	char *ref, *alt;
@@ -1168,4 +1168,5 @@ void bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)
 	if (alt2) bcf_enc_vchar(&b->shared, strlen(alt2), alt2); // add <M> if requested
 	bcf_enc_vint(&b->shared, 0, 0, -1); // empty FILTER
 	b->unpacked = 0;
+	return l_ref;
 }
