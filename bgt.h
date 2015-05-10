@@ -6,7 +6,6 @@
 
 #define BGT_F_SET_AC    0x0001
 #define BGT_F_NO_GT     0x0002
-#define BGT_F_VAR_ONLY  0x0004
 
 typedef struct {
 	int n_samples;
@@ -35,12 +34,16 @@ typedef struct {
 	bgt_rec_t *b;
 } bgt_pos_t;
 
+typedef int (*bgt_filter_f)(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n, const int *sidx, uint8_t *a[2], void *data);
+
 typedef struct {
 	int n_bgt, n_out, flag;
 	int *sample_idx;
 	bgt_t **bgt;
 	bgt_pos_t *p;
 	bcf_hdr_t *h_out;
+	bgt_filter_f filter_func;
+	void *filter_data;
 	uint8_t *a[2];
 } bgtm_t;
 
@@ -54,6 +57,7 @@ bgtm_t *bgtm_open(int n_files, char *const*fns);
 void bgtm_set_flag(bgtm_t *bm, int flag);
 void bgtm_close(bgtm_t *bm);
 void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
+void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
 

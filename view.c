@@ -4,6 +4,11 @@
 #include <stdio.h>
 #include "bgt.h"
 
+typedef struct {
+	int min_ac, min_an;
+	float min_af;
+} flt_aux_t;
+
 static inline int read1(bgt_t *bgt, bgtm_t *bm, bcf1_t *b)
 {
 	if (bgt) return bgt_read(bgt, b);
@@ -11,25 +16,38 @@ static inline int read1(bgt_t *bgt, bgtm_t *bm, bcf1_t *b)
 	return -1;
 }
 
+static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n, const int *sidx, uint8_t *a[2], void *data)
+{
+	flt_aux_t *flt = (flt_aux_t*)data;
+	if (an < flt->min_an) return 1;
+	if (ac < flt->min_ac) return 1;
+	if (an > 0 && (float)ac/an < flt->min_af) return 1;
+	return 0;
+}
+
 int main_view(int argc, char *argv[])
 {
-	int i, c, out_bcf = 0, n_samples = 0, clevel = -1, is_multi = 0, multi_flag = 0;
+	int i, c, out_bcf = 0, n_samples = 0, clevel = -1, is_multi = 0, multi_flag = 0, set_flt = 0;
 	bgt_t *bgt = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
 	htsFile *out;
 	char modew[8], *reg = 0, **samples = 0;
+	flt_aux_t flt;
 
+	memset(&flt, 0, sizeof(flt_aux_t));
 	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "mview") == 0);
 	is_multi = strcmp(argv[0], "mview") == 0? 1 : 0;
-	while ((c = getopt(argc, argv, "bs:r:l:aGv")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:aGC:F:N:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
 		else if (c == 's') samples = hts_readlines(optarg, &n_samples);
 		else if (is_multi && c == 'a') multi_flag |= BGT_F_SET_AC;
 		else if (is_multi && c == 'G') multi_flag |= BGT_F_NO_GT;
-		else if (is_multi && c == 'v') multi_flag |= BGT_F_SET_AC | BGT_F_VAR_ONLY;
+		else if (is_multi && c == 'N') flt.min_an = atoi(optarg), set_flt = 1;
+		else if (is_multi && c == 'C') flt.min_ac = atoi(optarg), set_flt = 1;
+		else if (is_multi && c == 'F') flt.min_af = atof(optarg), set_flt = 1;
 	}
 	if (clevel > 9) clevel = 9;
 	if (argc - optind < 1) {
@@ -44,7 +62,9 @@ int main_view(int argc, char *argv[])
 		if (is_multi) {
 			fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
 			fprintf(stderr, "  -G           don't output sample genotype\n");
-			fprintf(stderr, "  -v           output variants only (force -a)\n");
+			fprintf(stderr, "  -N INT       min AN [0]\n");
+			fprintf(stderr, "  -C INT       min AC [0]\n");
+			fprintf(stderr, "  -F FLOAT     min AF [0]\n");
 		}
 		return 1;
 	}
@@ -56,6 +76,7 @@ int main_view(int argc, char *argv[])
 	} else {
 		bm = bgtm_open(argc - optind, &argv[optind]);
 		bgtm_set_flag(bm, multi_flag);
+		if (set_flt) bgtm_set_filter(bm, filter_func, &flt);
 		if (n_samples > 0) bgtm_set_samples(bm, n_samples, samples);
 		if (reg) bgtm_set_region(bm, reg);
 	}
