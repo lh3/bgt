@@ -311,10 +311,11 @@ int bgtm_set_region(bgtm_t *bm, const char *reg)
 	return 0;
 }
 
-int bgtm_read(bgtm_t *bm, bcf1_t *b)
+int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 {
-	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref;
+	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref, ret = 0;
 	bcf1_t *b0 = 0;
+
 	// fill the buffer
 	for (i = n_rest = 0; i < bm->n_bgt; ++i) {
 		if (bm->p[i].n_b == 0)
@@ -368,22 +369,32 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		off += bgt->n_out<<1;
 	}
 	assert(off == bm->n_out<<1);
-	if (bm->flag & BGT_F_SET_AC) {
-		int32_t cnt[4], an, ac[2];
-		memset(cnt, 0, 4 * sizeof(int));
+	if (bm->flag & (BGT_F_SET_AC|BGT_F_VAR_ONLY)) {
+		int32_t an, ac[2], cnt[4];
+		memset(cnt, 0, 4 * 4);
 		for (i = 0; i < bm->n_out<<1; ++i)
 			++cnt[bm->a[1][i]<<1 | bm->a[0][i]];
 		an = cnt[0] + cnt[1] + cnt[3];
 		ac[0] = cnt[1], ac[1] = cnt[3];
+		ret = ac[0];
 		bcf_append_info_ints(bm->h_out, b, "AN", 1, &an);
 		bcf_append_info_ints(bm->h_out, b, "AC", b->n_allele - 1, ac);
 	}
 	if ((bm->flag & BGT_F_NO_GT) == 0)
 		bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
-	return 0;
+	return ret;
+}
+
+int bgtm_read(bgtm_t *bm, bcf1_t *b)
+{
+	int ret;
+	if (!(bm->flag & BGT_F_VAR_ONLY)) return bgtm_read_core(bm, b);
+	while ((ret = bgtm_read_core(bm, b)) == 0);
+	return ret;
 }
 
 void bgtm_set_flag(bgtm_t *bm, int flag)
 {
+	if (flag & BGT_F_VAR_ONLY) flag |= BGT_F_SET_AC;
 	bm->flag = flag;
 }

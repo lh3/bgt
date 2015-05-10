@@ -22,13 +22,14 @@ int main_view(int argc, char *argv[])
 
 	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "mview") == 0);
 	is_multi = strcmp(argv[0], "mview") == 0? 1 : 0;
-	while ((c = getopt(argc, argv, "bs:r:l:aG")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:aGv")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
 		else if (c == 's') samples = hts_readlines(optarg, &n_samples);
 		else if (is_multi && c == 'a') multi_flag |= BGT_F_SET_AC;
 		else if (is_multi && c == 'G') multi_flag |= BGT_F_NO_GT;
+		else if (is_multi && c == 'v') multi_flag |= BGT_F_SET_AC | BGT_F_VAR_ONLY;
 	}
 	if (clevel > 9) clevel = 9;
 	if (argc - optind < 1) {
@@ -43,6 +44,7 @@ int main_view(int argc, char *argv[])
 		if (is_multi) {
 			fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
 			fprintf(stderr, "  -G           don't output sample genotype\n");
+			fprintf(stderr, "  -v           output variants only (force -a)\n");
 		}
 		return 1;
 	}

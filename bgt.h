@@ -4,8 +4,9 @@
 #include "vcf.h"
 #include "pbwt.h"
 
-#define BGT_F_SET_AC 0x0001
-#define BGT_F_NO_GT  0x0002
+#define BGT_F_SET_AC    0x0001
+#define BGT_F_NO_GT     0x0002
+#define BGT_F_VAR_ONLY  0x0004
 
 typedef struct {
 	int n_samples;
