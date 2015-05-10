@@ -4,6 +4,8 @@
 #include "vcf.h"
 #include "pbwt.h"
 
+#define BGT_F_SET_AC 0x0001
+
 typedef struct {
 	int n_samples;
 	char **samples;
@@ -32,7 +34,7 @@ typedef struct {
 } bgt_pos_t;
 
 typedef struct {
-	int n_bgt, n_out;
+	int n_bgt, n_out, flag;
 	bgt_t **bgt;
 	bgt_pos_t *p;
 	bcf_hdr_t *h_out;
@@ -46,6 +48,7 @@ int bgt_set_region(bgt_t *bgt, const char *reg);
 int bgt_read(bgt_t *bgt, bcf1_t *b);
 
 bgtm_t *bgtm_open(int n_files, char *const*fns);
+void bgtm_set_flag(bgtm_t *bm, int flag);
 void bgtm_close(bgtm_t *bm);
 void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
 int bgtm_set_region(bgtm_t *bm, const char *reg);

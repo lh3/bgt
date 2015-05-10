@@ -360,7 +360,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		}
 		off += bgt->n_out<<1;
 	}
-	{
+	if (bm->flag & BGT_F_SET_AC) {
 		int32_t cnt[4], an, ac[2];
 		memset(cnt, 0, 4 * sizeof(int));
 		for (i = 0; i < bm->n_out<<1; ++i)
@@ -372,4 +372,9 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	}
 	bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
 	return 0;
+}
+
+void bgtm_set_flag(bgtm_t *bm, int flag)
+{
+	bm->flag = flag;
 }
