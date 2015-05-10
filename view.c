@@ -7,7 +7,7 @@
 static inline int read1(bgt_t *bgt, bgtm_t *bm, bcf1_t *b)
 {
 	if (bgt) return bgt_read(bgt, b);
-	if (bm) return bgtm_read(bm, b);
+	if (bm)  return bgtm_read(bm, b);
 	return -1;
 }
 
@@ -22,12 +22,13 @@ int main_view(int argc, char *argv[])
 
 	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "mview") == 0);
 	is_multi = strcmp(argv[0], "mview") == 0? 1 : 0;
-	while ((c = getopt(argc, argv, "bs:r:l:a")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:aG")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
 		else if (c == 's') samples = hts_readlines(optarg, &n_samples);
 		else if (is_multi && c == 'a') multi_flag |= BGT_F_SET_AC;
+		else if (is_multi && c == 'G') multi_flag |= BGT_F_NO_GT;
 	}
 	if (clevel > 9) clevel = 9;
 	if (argc - optind < 1) {
@@ -39,7 +40,10 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "  -r STR       region [all]\n");
 		fprintf(stderr, "  -l INT       compression level for BCF [detault]\n");
 		fprintf(stderr, "  -s STR/FILE  list of samples (STR if started with ':'; FILE otherwise) [all]\n");
-		if (is_multi) fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
+		if (is_multi) {
+			fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
+			fprintf(stderr, "  -G           don't output sample genotype\n");
+		}
 		return 1;
 	}
 
@@ -49,9 +53,9 @@ int main_view(int argc, char *argv[])
 		if (reg) bgt_set_region(bgt, reg);
 	} else {
 		bm = bgtm_open(argc - optind, &argv[optind]);
+		bgtm_set_flag(bm, multi_flag);
 		if (n_samples > 0) bgtm_set_samples(bm, n_samples, samples);
 		if (reg) bgtm_set_region(bm, reg);
-		bgtm_set_flag(bm, multi_flag);
 	}
 	for (i = 0; i < n_samples; ++i) free(samples[i]);
 	free(samples);

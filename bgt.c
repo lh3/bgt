@@ -143,6 +143,7 @@ void bgt_gen_gt(const bcf_hdr_t *h, bcf1_t *b, int m, const uint8_t **a)
 	int id, i;
 	id = bcf_id2int(h, BCF_DT_ID, "GT");
 	b->n_fmt = 1; b->n_sample = m;
+	b->indiv.l = 0;
 	bcf_enc_int1(&b->indiv, id);
 	bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
 	ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
@@ -279,15 +280,19 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kputs("##ALT=<ID=INS:ME,Description=\"Insertion of mobile element\">\n", &h);
 	for (i = 0; i < h0->n[BCF_DT_CTG]; ++i)
 		ksprintf(&h, "##contig=<ID=%s,length=%d>\n", h0->id[BCF_DT_CTG][i].key, h0->id[BCF_DT_CTG][i].val->info[0]);
-	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT", &h);
-	for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
-		bgt_t *bgt = bm->bgt[i];
-		bm->n_out += bgt->n_out;
-		for (j = 0; j < bgt->n_out; ++j) {
-			kputc('\t', &h);
-			kputs(bgt->samples[bgt->out[j]], &h);
+	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO", &h);
+	if (!(bm->flag & BGT_F_NO_GT)) {
+		kputs("\tFORMAT", &h);
+		for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
+			bgt_t *bgt = bm->bgt[i];
+			bm->n_out += bgt->n_out;
+			for (j = 0; j < bgt->n_out; ++j) {
+				kputc('\t', &h);
+				kputs(bgt->samples[bgt->out[j]], &h);
+			}
 		}
 	}
+	kputc('\n', &h);
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
 	bm->h_out = bcf_hdr_init();
 	bm->h_out->l_text = h.l + 1, bm->h_out->m_text = h.m, bm->h_out->text = h.s;
@@ -370,7 +375,8 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		bcf_append_info_ints(bm->h_out, b, "AN", 1, &an);
 		bcf_append_info_ints(bm->h_out, b, "AC", b->n_allele - 1, ac);
 	}
-	bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
+	if ((bm->flag & BGT_F_NO_GT) == 0)
+		bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
 	return 0;
 }
 
