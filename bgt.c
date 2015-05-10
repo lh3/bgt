@@ -291,8 +291,10 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 				kputs(bgt->samples[bgt->out[j]], &h);
 			}
 		}
+	} else {
+		for (i = bm->n_out = 0; i < bm->n_bgt; ++i)
+			bm->n_out += bm->bgt[i]->n_out;
 	}
-	kputc('\n', &h);
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
 	bm->h_out = bcf_hdr_init();
 	bm->h_out->l_text = h.l + 1, bm->h_out->m_text = h.m, bm->h_out->text = h.s;
@@ -365,6 +367,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		}
 		off += bgt->n_out<<1;
 	}
+	assert(off == bm->n_out<<1);
 	if (bm->flag & BGT_F_SET_AC) {
 		int32_t cnt[4], an, ac[2];
 		memset(cnt, 0, 4 * sizeof(int));
