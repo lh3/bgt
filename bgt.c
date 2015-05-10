@@ -361,6 +361,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		int32_t val = b->pos + b->rlen;
 		bcf_append_info_ints(bm->h_out, b, "END", 1, &val);
 	}
+	if ((bm->flag & BGT_F_NO_GT) && !(bm->flag & BGT_F_SET_AC)) return 0;
 	// generate bm->a
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_pos_t *p = &bm->p[i];
