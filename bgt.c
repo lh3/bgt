@@ -238,6 +238,7 @@ bgtm_t *bgtm_open(int n_files, char *const*fns)
 void bgtm_close(bgtm_t *bm)
 {
 	int i, j;
+	free(bm->sample_idx);
 	bcf_hdr_destroy(bm->h_out);
 	free(bm->a[0]); free(bm->a[1]);
 	for (i = 0; i < bm->n_bgt; ++i) {
@@ -257,12 +258,34 @@ void bgtm_close(bgtm_t *bm)
 
 void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 {
-	int i, j;
+	int i, j, m;
 	kstring_t h = {0,0,0};
 	bcf_hdr_t *h0;
+	khash_t(s2i) *hash;
+
 	if (bm->n_bgt == 0) return;
-	for (i = 0; i < bm->n_bgt; ++i)
+	hash = kh_init(s2i);
+	for (i = 0; i < n; ++i) {
+		khint_t k;
+		int absent;
+		k = kh_put(s2i, hash, samples[i], &absent);
+		if (absent) kh_val(hash, k) = i;
+	}
+	for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
 		bgt_set_samples(bm->bgt[i], n, samples);
+		bm->n_out += bm->bgt[i]->n_out;
+	}
+	bm->sample_idx = (int*)calloc(bm->n_out, sizeof(int));
+	for (i = m = 0; i < bm->n_bgt; ++i) {
+		bgt_t *bgt = bm->bgt[i];
+		for (j = 0; j < bgt->n_out; ++j) {
+			khint_t k;
+			k = kh_get(s2i, hash, bgt->samples[bgt->out[j]]);
+			assert(k != kh_end(hash));
+			bm->sample_idx[m++] = kh_val(hash, k);
+		}
+	}
+	kh_destroy(s2i, hash);
 
 	h0 = bm->bgt[0]->h0; // FIXME: test if headers are consistent
 	kputs("##fileformat=VCFv4.1\n", &h);
@@ -283,17 +306,13 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO", &h);
 	if (!(bm->flag & BGT_F_NO_GT)) {
 		kputs("\tFORMAT", &h);
-		for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
+		for (i = 0; i < bm->n_bgt; ++i) {
 			bgt_t *bgt = bm->bgt[i];
-			bm->n_out += bgt->n_out;
 			for (j = 0; j < bgt->n_out; ++j) {
 				kputc('\t', &h);
 				kputs(bgt->samples[bgt->out[j]], &h);
 			}
 		}
-	} else {
-		for (i = bm->n_out = 0; i < bm->n_bgt; ++i)
-			bm->n_out += bm->bgt[i]->n_out;
 	}
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
 	bm->h_out = bcf_hdr_init();

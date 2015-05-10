@@ -37,6 +37,7 @@ typedef struct {
 
 typedef struct {
 	int n_bgt, n_out, flag;
+	int *sample_idx;
 	bgt_t **bgt;
 	bgt_pos_t *p;
 	bcf_hdr_t *h_out;
