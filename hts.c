@@ -160,12 +160,14 @@ typedef struct {
 
 struct __hts_idx_t {
 	int fmt, min_shift, n_lvls, n_bins;
+	int32_t rec_shift;
 	uint32_t l_meta;
 	int32_t n, m;
-	uint64_t n_no_coor;
+	uint64_t n_no_coor, n_rec; // n_rec: number of records "pushed" so far
 	bidx_t **bidx;
 	lidx_t *lidx;
 	uint8_t *meta;
+	lidx_t ridx;
 	struct {
 		uint32_t last_bin, save_bin;
 		int last_coor, last_tid, save_tid, finished;
@@ -238,6 +240,13 @@ hts_idx_t *hts_idx_init(int n, int fmt, uint64_t offset0, int min_shift, int n_l
 		idx->lidx = (lidx_t*) calloc(n, sizeof(lidx_t));
 	}
 	return idx;
+}
+
+int hts_idx_rec_shift(hts_idx_t *idx, int rec_shift)
+{
+	if (rec_shift < 0) return idx->rec_shift;
+	idx->rec_shift = rec_shift;
+	return idx->rec_shift;
 }
 
 static void update_loff(hts_idx_t *idx, int i, int free_lidx)
@@ -381,6 +390,14 @@ int hts_idx_push(hts_idx_t *idx, int tid, int beg, int end, uint64_t offset, int
 	else ++idx->z.n_unmapped;
 	idx->z.last_off = offset;
 	idx->z.last_coor = beg;
+	if (idx->rec_shift > 0 && (idx->n_rec & ((1<<idx->rec_shift) - 1)) == 0) {
+		if (idx->ridx.n == idx->ridx.m) {
+			idx->ridx.m = idx->ridx.m? idx->ridx.m<<1 : 64;
+			idx->ridx.offset = (uint64_t*)realloc(idx->ridx.offset, idx->ridx.m * 8);
+		}
+		idx->ridx.offset[idx->ridx.n++] = offset;
+	}
+	++idx->n_rec;
 	return 0;
 }
 
@@ -389,6 +406,7 @@ void hts_idx_destroy(hts_idx_t *idx)
 	khint_t k;
 	int i;
 	if (idx == 0) return;
+	free(idx->ridx.offset);
 	for (i = 0; i < idx->m; ++i) {
 		bidx_t *bidx = idx->bidx[i];
 		free(idx->lidx[i].offset);
@@ -510,6 +528,13 @@ void hts_idx_save(const hts_idx_t *idx, const char *fn, int fmt)
 		} else bgzf_write(fp, &x, 12);
 		if (idx->l_meta) bgzf_write(fp, idx->meta, idx->l_meta);
 		hts_idx_save_core(idx, fp, HTS_FMT_CSI);
+		if (idx->rec_shift > 0) { // FIXME: NOT WORKING ON BIG ENDIAN!!!
+			bgzf_write(fp, "RNI\1", 4);
+			bgzf_write(fp, &idx->n_rec, 8);
+			bgzf_write(fp, &idx->rec_shift, 4);
+			bgzf_write(fp, &idx->ridx.n, 4);
+			bgzf_write(fp, idx->ridx.offset, idx->ridx.n * 8);
+		}
 		bgzf_close(fp);
 	} else if (fmt == HTS_FMT_TBI) {
 		BGZF *fp;
@@ -530,6 +555,7 @@ void hts_idx_save(const hts_idx_t *idx, const char *fn, int fmt)
 static void hts_idx_load_core(hts_idx_t *idx, void *fp, int fmt)
 {
 	int32_t i, n, is_be;
+	char magic[4];
 	int is_bgzf = (fmt != HTS_FMT_BAI);
 	is_be = ed_is_big();
 	for (i = 0; i < idx->n; ++i) {
@@ -573,6 +599,15 @@ static void hts_idx_load_core(hts_idx_t *idx, void *fp, int fmt)
 	}
 	if (idx_read(is_bgzf, fp, &idx->n_no_coor, 8) != 8) idx->n_no_coor = 0;
 	if (is_be) ed_swap_8p(&idx->n_no_coor);
+	// FIXME: NOT WORKING ON BIG ENDIAN!!!
+	if (bgzf_read(fp, magic, 4) == 4 && strncmp(magic, "RNI\1", 4) == 0) {
+		bgzf_read(fp, &idx->n_rec, 8);
+		bgzf_read(fp, &idx->rec_shift, 4);
+		bgzf_read(fp, &idx->ridx.n, 4);
+		idx->ridx.m = idx->ridx.n;
+		idx->ridx.offset = (uint64_t*)malloc(idx->ridx.m * 8);
+		bgzf_read(fp, idx->ridx.offset, idx->ridx.n * 8);
+	}
 }
 
 hts_idx_t *hts_idx_load_direct(const char *fn, int fmt)

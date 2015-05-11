@@ -97,6 +97,7 @@ extern "C" {
 
 	hts_idx_t *hts_idx_init(int n, int fmt, uint64_t offset0, int min_shift, int n_lvls);
 	void hts_idx_destroy(hts_idx_t *idx);
+	int hts_idx_rec_shift(hts_idx_t *idx, int rec_shift);
 	int hts_idx_push(hts_idx_t *idx, int tid, int beg, int end, uint64_t offset, int is_mapped);
 	void hts_idx_finish(hts_idx_t *idx, uint64_t final_offset);
 
