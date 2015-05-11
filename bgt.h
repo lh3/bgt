@@ -18,8 +18,9 @@ typedef struct {
 	bcf1_t *b0; // site-only BCF record
 	hts_idx_t *idx; // BCF index
 	hts_itr_t *itr;
+	const void *bed;
 
-	int n_out, *out;
+	int bed_excl, n_out, *out;
 	bcf_hdr_t *h_out;
 } bgt_t;
 
@@ -50,14 +51,16 @@ typedef struct {
 bgt_t *bgt_open(const char *prefix);
 void bgt_close(bgt_t *bgt);
 void bgt_set_samples(bgt_t *bgt, int n, char *const* samples);
+void bgt_set_bed(bgt_t *bgt, const void *bed, int excl);
 int bgt_set_region(bgt_t *bgt, const char *reg);
 int bgt_read(bgt_t *bgt, bcf1_t *b);
 
 bgtm_t *bgtm_open(int n_files, char *const*fns);
-void bgtm_set_flag(bgtm_t *bm, int flag);
 void bgtm_close(bgtm_t *bm);
+void bgtm_set_flag(bgtm_t *bm, int flag);
 void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
 void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
+void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
 

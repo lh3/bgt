@@ -1,7 +1,7 @@
 CC=			gcc
 CFLAGS=		-g -Wall -O2 -Wc++-compat -Wno-unused-function
 CPPFLAGS=
-OBJS=		bgzf.o hts.o vcf.o pbwt.o bgt.o import.o view.o
+OBJS=		bgzf.o hts.o vcf.o bedidx.o pbwt.o bgt.o import.o view.o
 INCLUDES=
 LIBS=		-lpthread -lz
 PROG=		bgt pbfview

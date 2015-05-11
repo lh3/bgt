@@ -11,6 +11,10 @@ KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
 #define generic_key(x) (x)
 KRADIX_SORT_INIT(i, int, generic_key, 4)
 
+void *bed_read(const char *fn);
+int bed_overlap(const void *_h, const char *chr, int beg, int end);
+void bed_destroy(void *_h);
+
 /**********************
  * Single BGT reading *
  **********************/
@@ -120,7 +124,7 @@ int bgt_set_region(bgt_t *bgt, const char *reg)
 
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
-int bgt_read_core(bgt_t *bgt)
+int bgt_read_core0(bgt_t *bgt)
 {
 	int i, id, row;
 	row = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
@@ -152,6 +156,21 @@ void bgt_gen_gt(const bcf_hdr_t *h, bcf1_t *b, int m, const uint8_t **a)
 	b->indiv.s[b->indiv.l] = 0;
 }
 
+int bgt_read_core(bgt_t *bgt)
+{
+	if (bgt->bed) {
+		int ret;
+		while ((ret = bgt_read_core0(bgt)) >= 0) {
+			int r;
+			r = bed_overlap(bgt->bed, bgt->h_out->id[BCF_DT_CTG][bgt->b0->rid].key, bgt->b0->pos, bgt->b0->pos + bgt->b0->rlen);
+			if (bgt->bed_excl && r) continue;
+			if (!bgt->bed_excl && !r) continue;
+			break;
+		}
+		return ret;
+	} else return bgt_read_core0(bgt);
+}
+
 int bgt_read(bgt_t *bgt, bcf1_t *b)
 {
 	int ret;
@@ -164,6 +183,8 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	bgt_gen_gt(bgt->h_out, b, bgt->n_out, a);
 	return ret;
 }
+
+void bgt_set_bed(bgt_t *bgt, const void *bed, int excl) { bgt->bed = bed, bgt->bed_excl = excl; }
 
 /*************************************
  * reading records with the same pos *
@@ -410,6 +431,13 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	int ret;
 	while ((ret = bgtm_read_core(bm, b)) > 0);
 	return ret;
+}
+
+void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_set_bed(bm->bgt[i], bed, excl);
 }
 
 void bgtm_set_flag(bgtm_t *bm, int flag) { bm->flag = flag; }
