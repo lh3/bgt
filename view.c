@@ -65,8 +65,8 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "  -r STR       region [all]\n");
 		fprintf(stderr, "  -l INT       compression level for BCF [detault]\n");
 		fprintf(stderr, "  -s STR/FILE  list of samples (STR if started with ':'; FILE otherwise) [all]\n");
-		fprintf(stderr, "  -B FILE      extract regions in BED FILE [null]\n");
-		fprintf(stderr, "  -e           exclude regions in BED FILE (effective with -B) [null]\n");
+		fprintf(stderr, "  -B FILE      extract variants overlapping BED FILE [null]\n");
+		fprintf(stderr, "  -e           exclude variants overlapping BED FILE (effective with -B) [null]\n");
 		if (is_multi) {
 			fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
 			fprintf(stderr, "  -G           don't output sample genotype\n");
