@@ -600,13 +600,13 @@ static void hts_idx_load_core(hts_idx_t *idx, void *fp, int fmt)
 	if (idx_read(is_bgzf, fp, &idx->n_no_coor, 8) != 8) idx->n_no_coor = 0;
 	if (is_be) ed_swap_8p(&idx->n_no_coor);
 	// FIXME: NOT WORKING ON BIG ENDIAN!!!
-	if (bgzf_read(fp, magic, 4) == 4 && strncmp(magic, "RNI\1", 4) == 0) {
-		bgzf_read(fp, &idx->n_rec, 8);
-		bgzf_read(fp, &idx->rec_shift, 4);
-		bgzf_read(fp, &idx->ridx.n, 4);
+	if (idx_read(is_bgzf, fp, magic, 4) == 4 && strncmp(magic, "RNI\1", 4) == 0) {
+		idx_read(is_bgzf, fp, &idx->n_rec, 8);
+		idx_read(is_bgzf, fp, &idx->rec_shift, 4);
+		idx_read(is_bgzf, fp, &idx->ridx.n, 4);
 		idx->ridx.m = idx->ridx.n;
 		idx->ridx.offset = (uint64_t*)malloc(idx->ridx.m * 8);
-		bgzf_read(fp, idx->ridx.offset, idx->ridx.n * 8);
+		idx_read(is_bgzf, fp, idx->ridx.offset, idx->ridx.n * 8);
 	}
 }
 
