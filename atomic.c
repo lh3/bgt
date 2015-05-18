@@ -12,19 +12,6 @@ static inline int bcf_atom_cmp2(const bcf_atom_t *a, const bcf_atom_t *b)
 #define atom_lt(a, b) (bcf_atom_cmp2(&(a), &(b)) < 0)
 KSORT_INIT(atom, bcf_atom_t, atom_lt)
 
-void bcf_atom_print(const bcf_hdr_t *h, int n, const bcf_atom_t *aa)
-{
-	int i, j;
-	printf("===> %d <===\n", n);
-	for (i = 0; i < n; ++i) {
-		const bcf_atom_t *a = &aa[i];
-		printf("%s\t%d\t%s\t%s\t%c\t", h->id[BCF_DT_CTG][a->rid].key, a->pos+1, a->ref.s, a->alt, "NY"[a->has_multi]);
-		for (j = 0; j < a->n_gt; ++j)
-			putchar('0' + a->gt[j]);
-		putchar('\n');
-	}
-}
-
 static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 {
 	int i, j, k, *eq, id_GT, *tr, has_dup = 0;
