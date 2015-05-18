@@ -28,7 +28,7 @@ int main_ucf2bgt(int argc, char *argv[])
 		}
 	}
 	if (argc - optind < 2) {
-		fprintf(stderr, "Usage: bgt ucf2bgt [options] <in.bcf>|<in.vcf>|<in.vcf.gz> <out-prefix>\n");
+		fprintf(stderr, "Usage: bgt import [options] <in.bcf>|<in.vcf>|<in.vcf.gz> <out-prefix>\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -S           input is VCF\n");
 		fprintf(stderr, "  -l INT       compression level [%d]\n", clevel);
