@@ -1,9 +1,5 @@
 #include "atomic.h"
 
-/***********
- * Atomize *
- ***********/
-
 #include "ksort.h"
 #define atom_lt(a, b) (bcf_atom_cmp(&(a), &(b)) < 0)
 KSORT_INIT(atom, bcf_atom_t, atom_lt)
@@ -35,6 +31,7 @@ static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 		int m;
 		bcf_atom_t *ak = &a[k];
 		if (eq[k] != k) continue; // duplicated atom
+		if (!ak->from_new) continue;
 		for (i = 1; i < b->n_allele; ++i) tr[i] = 0;
 		for (i = 0; i < n; ++i) { // WARNING: quadratic in the number of atoms
 			if (eq[i] == eq[k]) // identical allele
@@ -43,10 +40,11 @@ static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 				tr[a[i].anum] = 3;
 		}
 		ak->gt = (uint8_t*)realloc(ak->gt, b->n_sample * gt->n);
+		ak->n_gt = 0;
 		for (i = 0, m = 0; i < b->n_sample; ++i, m += gt->n) {
 			for (j = 0; j < gt->n; ++j) {
 				int c = (int)(gt->p[m+j] >> 1) - 1;
-				ak->gt[m+j] = c < 0? 2 : tr[c];
+				ak->gt[ak->n_gt++] = c < 0? 2 : tr[c];
 			}
 		}
 	}
@@ -76,6 +74,7 @@ static void bcf_add_atom(bcf_atom_v *a, int rid, int pos, int rlen, int anum, in
 	p = &a->a[a->n++];
 	p->rid = rid, p->pos = pos, p->rlen = rlen, p->anum = anum;
 	p->ref.l = 0;
+	p->from_new = 1;
 	if (l_ref < 0) l_ref = strlen(ref);
 	if (l_alt < 0) l_alt = strlen(alt);
 	kputsn(ref, l_ref, &p->ref); kputc('\0', &p->ref);
@@ -85,9 +84,12 @@ static void bcf_add_atom(bcf_atom_v *a, int rid, int pos, int rlen, int anum, in
 
 void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 {
-	int i, cid, l_ref, l_cigar = 0, old_n = a->n;
+	int i, cid, l_ref, l_cigar = 0;
 	kstring_t cigar = {0,0,0};
 	char *p_cigar = 0, *p = 0;
+
+	for (i = 0; i < a->n; ++i)
+		a->a[i].from_new = 0;
 
 	cid = bcf_id2int(h, BCF_DT_ID, "CIGAR");
 	if (cid >= 0) {
@@ -160,5 +162,62 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 		}
 	}
 	free(cigar.s);
-	a->n = old_n + bcf_atom_gen_at(h, b, a->n - old_n, &a->a[old_n]);
+	a->n = bcf_atom_gen_at(h, b, a->n, a->a);
+}
+
+bcf_atombuf_t *bcf_atombuf_init(htsFile *in)
+{
+	bcf_atombuf_t *buf;
+	buf = (bcf_atombuf_t*)calloc(1, sizeof(bcf_atombuf_t));
+	buf->in = in;
+	buf->h = vcf_hdr_read(buf->in);
+	buf->b = bcf_init1();
+	if (vcf_read1(buf->in, buf->h, buf->b) >= 0) {
+		bcf_atomize(buf->h, buf->b, &buf->a);
+		if (vcf_read1(buf->in, buf->h, buf->b) < 0)
+			buf->no_vcf = 1;
+	} else buf->no_vcf = 1;
+	return buf;
+}
+
+void bcf_atombuf_destroy(bcf_atombuf_t *buf)
+{
+	int i;
+	for (i = 0; i < buf->a.m; ++i) {
+		free(buf->a.a[i].ref.s);
+		free(buf->a.a[i].gt);
+	}
+	free(buf->a.a);
+	bcf_destroy1(buf->b);
+	bcf_hdr_destroy(buf->h);
+	free(buf);
+}
+
+const bcf_atom_t *bcf_atom_read(bcf_atombuf_t *buf)
+{
+	if (buf->start == buf->a.n) {
+		if (buf->no_vcf) return 0;
+		buf->a.n = buf->start = 0;
+		bcf_atomize(buf->h, buf->b, &buf->a);
+		if (vcf_read1(buf->in, buf->h, buf->b) < 0)
+			buf->no_vcf = 1;
+	}
+	assert(buf->start < buf->a.n);
+	for (;;) {
+		if (buf->no_vcf || buf->a.a[buf->start].rid < buf->b->rid || (buf->a.a[buf->start].rid == buf->b->rid && buf->a.a[buf->start].pos < buf->b->pos))
+			return &buf->a.a[buf->start++];
+		if (buf->start != 0) {
+			bcf_atom_t *tmp;
+			tmp = (bcf_atom_t*)malloc(buf->start * sizeof(bcf_atom_t));
+			memcpy(tmp, buf->a.a, buf->start * sizeof(bcf_atom_t));
+			memmove(buf->a.a, &buf->a.a[buf->start], (buf->a.n - buf->start) * sizeof(bcf_atom_t));
+			buf->a.n -= buf->start;
+			memcpy(buf->a.a + buf->a.n, tmp, buf->start * sizeof(bcf_atom_t));
+			buf->start = 0;
+			free(tmp);
+		}
+		bcf_atomize(buf->h, buf->b, &buf->a);
+		if (vcf_read1(buf->in, buf->h, buf->b) < 0)
+			buf->no_vcf = 1;
+	}
 }

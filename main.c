@@ -6,6 +6,7 @@
 #define BGT_VERSION "r85"
 
 int main_ucf2bgt(int argc, char *argv[]);
+int main_atomize(int argc, char *argv[]);
 int main_view(int argc, char *argv[]);
 
 static int usage()
@@ -23,6 +24,7 @@ int main(int argc, char *argv[])
 {
 	if (argc < 2) return usage();
 	if (strcmp(argv[1], "ucf2bgt") == 0) return main_ucf2bgt(argc-1, argv+1);
+	else if (strcmp(argv[1], "atomize") == 0) return main_atomize(argc-1, argv+1);
 	else if (strcmp(argv[1], "import") == 0) return main_ucf2bgt(argc-1, argv+1);
 	else if (strcmp(argv[1], "view") == 0) return main_view(argc-1, argv+1);
 	else if (strcmp(argv[1], "mview") == 0) return main_view(argc-1, argv+1);
