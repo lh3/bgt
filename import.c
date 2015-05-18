@@ -76,14 +76,6 @@ int main_ucf2bgt(int argc, char *argv[])
 
 	while ((a = bcf_atom_read(ab)) != 0) {
 		int32_t i, val = n;
-		/*
-		printf("%s\t%d\t%s\t%s\t:%d:", ab->h->id[BCF_DT_CTG][a->rid].key, a->pos+1, a->ref.s, a->alt, a->has_multi);
-		for (i = 0; i < a->n_gt; ++i) {
-			putchar('\t');
-			putchar('0' + a->gt[i]);
-		}
-		putchar('\n');
-		*/
 		bcf_atom2bcf(a, b, 1, -1);
 		bcf_append_info_ints(h0, b, "_row", 1, &val);
 		for (i = 0; i < a->n_gt; ++i)

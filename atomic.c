@@ -12,7 +12,7 @@ static inline int bcf_atom_cmp2(const bcf_atom_t *a, const bcf_atom_t *b)
 #define atom_lt(a, b) (bcf_atom_cmp2(&(a), &(b)) < 0)
 KSORT_INIT(atom, bcf_atom_t, atom_lt)
 
-void bcf_atom_print(const bcf_hdr_t *h, int n, bcf_atom_t *aa)
+void bcf_atom_print(const bcf_hdr_t *h, int n, const bcf_atom_t *aa)
 {
 	int i, j;
 	printf("===> %d <===\n", n);
