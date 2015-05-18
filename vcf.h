@@ -109,6 +109,17 @@ typedef struct {
 	uint8_t *unpack_ptr; // keep the place before which unpack is done
 } bcf1_t;
 
+typedef struct {
+	kstring_t ref;
+	char *alt;
+	int rid, pos, rlen, anum;
+} bcf_atom_t;
+
+typedef struct {
+	int n, m;
+	bcf_atom_t *a;
+} bcf_atom_v;
+
 #define bcf_int8_missing  INT8_MIN
 #define bcf_int16_missing INT16_MIN
 #define bcf_int32_missing INT32_MIN
@@ -246,6 +257,8 @@ extern "C" {
 	int bcfcmp(const bcf1_t *a, const bcf1_t *b);
 	int bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2);
 	int bcf_append_info_ints(const bcf_hdr_t *h, bcf1_t *b, const char *key, int n, const int32_t *val);
+
+	void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a);
 
 #ifdef __cplusplus
 }

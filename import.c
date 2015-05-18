@@ -72,6 +72,9 @@ int main_ucf2bgt(int argc, char *argv[])
 	out = hts_open(fn, modew, 0);
 	vcf_hdr_write(out, h0);
 	b = bcf_init1();
+
+	bcf_atom_v atoms = {0,0,0};
+
 	while (vcf_read1(in, h, b) >= 0) {
 		int i, k, j;
 		int32_t val = n;
@@ -79,6 +82,11 @@ int main_ucf2bgt(int argc, char *argv[])
 
 		// insert "_row" to INFO
 		bcf_append_info_ints(h, b, "_row", 1, &val);
+
+		atoms.n = 0;
+		bcf_atomize(h, b, &atoms);
+		for (i = 0; i < atoms.n; ++i)
+			fprintf(stderr, "%d\t%d\t%s\t%s\n", atoms.a[i].rid, atoms.a[i].pos, atoms.a[i].ref.s, atoms.a[i].alt);
 
 		// write genotypes
 		bcf_unpack(b, BCF_UN_FMT);
