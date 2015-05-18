@@ -12,6 +12,19 @@ static inline int bcf_atom_cmp2(const bcf_atom_t *a, const bcf_atom_t *b)
 #define atom_lt(a, b) (bcf_atom_cmp2(&(a), &(b)) < 0)
 KSORT_INIT(atom, bcf_atom_t, atom_lt)
 
+void bcf_atom_print(const bcf_hdr_t *h, int n, bcf_atom_t *aa)
+{
+	int i, j;
+	printf("===> %d <===\n", n);
+	for (i = 0; i < n; ++i) {
+		const bcf_atom_t *a = &aa[i];
+		printf("%s\t%d\t%s\t%s\t%c\t", h->id[BCF_DT_CTG][a->rid].key, a->pos+1, a->ref.s, a->alt, "NY"[a->has_multi]);
+		for (j = 0; j < a->n_gt; ++j)
+			putchar('0' + a->gt[j]);
+		putchar('\n');
+	}
+}
+
 static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 {
 	int i, j, k, *eq, id_GT, *tr, has_dup = 0;
@@ -40,6 +53,7 @@ static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 		bcf_atom_t *ak = &a[k];
 		if (eq[k] != k) continue; // duplicated atom
 		if (!ak->from_new) continue;
+		ak->has_multi = 0;
 		for (i = 1; i < b->n_allele; ++i) tr[i] = 0;
 		for (i = 0; i < n; ++i) { // WARNING: quadratic in the number of atoms
 			if (eq[i] == eq[k]) // identical allele
@@ -52,7 +66,9 @@ static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 		for (i = 0, m = 0; i < b->n_sample; ++i, m += gt->n) {
 			for (j = 0; j < gt->n; ++j) {
 				int c = (int)(gt->p[m+j] >> 1) - 1;
-				ak->gt[ak->n_gt++] = c < 0? 2 : tr[c];
+				c = c < 0? 2 : tr[c];
+				ak->gt[ak->n_gt++] = c;
+				if (c == 3) ak->has_multi = 1;
 			}
 		}
 	}
@@ -227,5 +243,31 @@ const bcf_atom_t *bcf_atom_read(bcf_atombuf_t *buf)
 		bcf_atomize(buf->h, buf->b, &buf->a);
 		if (vcf_read1(buf->in, buf->h, buf->b) < 0)
 			buf->no_vcf = 1;
+	}
+}
+
+void bcf_atom2bcf(const bcf_atom_t *a, bcf1_t *b, int write_M, int id_GT)
+{
+	static uint8_t conv[4] = { 1<<1|1, 2<<1|1, 0<<1|1, 3<<1|1 };
+	b->rid = a->rid, b->pos = a->pos, b->rlen = a->rlen;
+	b->qual = 0, b->n_info = b->n_fmt = b->n_sample = 0;
+	b->n_allele = write_M && a->has_multi? 3 : 2;
+	b->shared.l = b->indiv.l = 0;
+	bcf_enc_size(&b->shared, 0, BCF_BT_CHAR); // empty ID
+	bcf_enc_vchar(&b->shared, a->alt - a->ref.s - 1, a->ref.s);
+	bcf_enc_vchar(&b->shared, a->ref.s + a->ref.l - a->alt, a->alt);
+	if (b->n_allele > 2) bcf_enc_vchar(&b->shared, 3, "<M>");
+	bcf_enc_vint(&b->shared, 0, 0, -1); // empty FILTER
+	b->unpacked = 0;
+
+	if (id_GT >= 0) {
+		int i;
+		b->n_fmt = 1; b->n_sample = a->n_gt>>1;
+		bcf_enc_int1(&b->indiv, id_GT);
+		bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
+		ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
+		for (i = 0; i < b->n_sample<<1; ++i)
+			b->indiv.s[b->indiv.l++] = conv[a->gt[i]];
+		b->indiv.s[b->indiv.l] = 0;
 	}
 }

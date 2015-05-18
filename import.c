@@ -13,10 +13,12 @@ int main_ucf2bgt(int argc, char *argv[])
 	uint8_t *bits[2];
 	int64_t n = 0;
 	htsFile *in, *out;
-	bcf_hdr_t *h, *h0;
+	bcf_hdr_t *h0;
 	bcf1_t *b;
 	FILE *fp;
 	pbf_t *pb;
+	bcf_atombuf_t *ab;
+	const bcf_atom_t *a;
 
 	while ((c = getopt(argc, argv, "l:St:")) >= 0) {
 		switch (c) {
@@ -40,31 +42,30 @@ int main_ucf2bgt(int argc, char *argv[])
 
 	in = hts_open(argv[optind], moder, fn_ref);
 	assert(in);
-	h = vcf_hdr_read(in);
-	assert(h);
-	assert(h->n[BCF_DT_SAMPLE] > 0);
-	id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
+	ab = bcf_atombuf_init(in);
+	assert(ab->h->n[BCF_DT_SAMPLE] > 0);
+	h0 = bcf_hdr_subset(ab->h, 0, 0, 0);
+	id_GT = bcf_id2int(h0, BCF_DT_ID, "GT");
 	if (id_GT < 0) {
-		bcf_hdr_append(h, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">");
-		id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
+		bcf_hdr_append(h0, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">");
+		id_GT = bcf_id2int(h0, BCF_DT_ID, "GT");
 	}
-	bcf_hdr_append(h, "##INFO=<ID=_row,Number=1,Type=Integer,Description=\"row number\">");
-	h0 = bcf_hdr_subset(h, 0, 0, 0);
+	bcf_hdr_append(h0, "##INFO=<ID=_row,Number=1,Type=Integer,Description=\"row number\">");
 
 	// write sample list
 	sprintf(fn, "%s.spl", prefix);
 	fp = fopen(fn, "wb");
-	for (i = 0; i < h->n[BCF_DT_SAMPLE]; ++i) {
-		fputs(h->id[BCF_DT_SAMPLE][i].key, fp);
+	for (i = 0; i < ab->h->n[BCF_DT_SAMPLE]; ++i) {
+		fputs(ab->h->id[BCF_DT_SAMPLE][i].key, fp);
 		fputc('\n', fp);
 	}
 	fclose(fp);
 
 	// prepare PBF to write
 	sprintf(fn, "%s.pbf", prefix);
-	pb = pbf_open_w(fn, h->n[BCF_DT_SAMPLE]*2, 2, 13);
-	bits[0] = (uint8_t*)calloc(h->n[BCF_DT_SAMPLE]*2, 1);
-	bits[1] = (uint8_t*)calloc(h->n[BCF_DT_SAMPLE]*2, 1);
+	pb = pbf_open_w(fn, ab->h->n[BCF_DT_SAMPLE]*2, 2, 13);
+	bits[0] = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
+	bits[1] = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
 
 	strcpy(modew, "wb");
 	if (clevel >= 0 && clevel <= 9) sprintf(modew + 2, "%d", clevel);
@@ -73,51 +74,26 @@ int main_ucf2bgt(int argc, char *argv[])
 	vcf_hdr_write(out, h0);
 	b = bcf_init1();
 
-	bcf_atom_v atoms = {0,0,0};
-
-	while (vcf_read1(in, h, b) >= 0) {
-		int i, k, j;
-		int32_t val = n;
-		bcf_fmt_t *gt;
-
-		// insert "_row" to INFO
-		bcf_append_info_ints(h, b, "_row", 1, &val);
-
-		atoms.n = 0;
-		bcf_atomize(h, b, &atoms);
-		for (i = 0; i < atoms.n; ++i) {
-			fprintf(stderr, "%d\t%d\t%s\t%s", atoms.a[i].rid, atoms.a[i].pos, atoms.a[i].ref.s, atoms.a[i].alt);
-			for (j = 0; j < b->n_sample; ++j) {
-				fputc('\t', stderr);
-				for (k = 0; k < 2; ++k)
-					fprintf(stderr, "%d", atoms.a[i].gt[j<<1|k]);
-			}
-			fputc('\n', stderr);
+	while ((a = bcf_atom_read(ab)) != 0) {
+		int32_t i, val = n;
+		/*
+		printf("%s\t%d\t%s\t%s\t:%d:", ab->h->id[BCF_DT_CTG][a->rid].key, a->pos+1, a->ref.s, a->alt, a->has_multi);
+		for (i = 0; i < a->n_gt; ++i) {
+			putchar('\t');
+			putchar('0' + a->gt[i]);
 		}
-
-		// write genotypes
-		bcf_unpack(b, BCF_UN_FMT);
-		for (i = 0; i < b->n_fmt; ++i)
-			if (b->d.fmt[i].id == id_GT) break;
-		if (i == b->n_fmt) continue; // no GT field
-		gt = &b->d.fmt[i];
-		assert(gt->type == BCF_BT_INT8);
-		for (i = k = 0; i < b->n_sample; ++i, k += 2) {
-			assert(gt->n <= 2);
-			for (j = 0; j < gt->n; ++j) {
-				int a = (int)(gt->p[k+j] >> 1) - 1;
-				int b = a < 0? 2 : a >= 2? 3 : a;
-				if (gt->n == 2) bits[0][k+j] = b&1, bits[1][k+j] = b>>1;
-				else bits[0][k] = bits[0][k+1] = b&1, bits[1][k] = bits[1][k+1] = b>>1;
-			}
-		}
+		putchar('\n');
+		*/
+		bcf_atom2bcf(a, b, 1, -1);
+		bcf_append_info_ints(h0, b, "_row", 1, &val);
+		for (i = 0; i < a->n_gt; ++i)
+			bits[0][i] = a->gt[i]&1, bits[1][i] = a->gt[i]>>1&1;
 		pbf_write(pb, bits);
-
-		// write BCF
 		bcf_subset(h0, b, 0, 0);
 		vcf_write1(out, h0, b);
 		++n;
 	}
+
 	bcf_destroy1(b);
 	hts_close(out);
 
@@ -125,7 +101,7 @@ int main_ucf2bgt(int argc, char *argv[])
 	free(bits[0]); free(bits[1]);
 
 	bcf_hdr_destroy(h0);
-	bcf_hdr_destroy(h);
+	bcf_atombuf_destroy(ab);
 	hts_close(in);
 
 	bcf_index_build(fn, 14);
