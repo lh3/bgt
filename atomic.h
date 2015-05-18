@@ -31,13 +31,10 @@ const bcf_atom_t *bcf_atom_read(bcf_atombuf_t *buf);
 
 static inline int bcf_atom_cmp(const bcf_atom_t *a, const bcf_atom_t *b)
 {
-	int ret;
 	if (a->rid != b->rid) return a->rid - b->rid;
 	if (a->pos != b->pos) return a->pos - b->pos;
 	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
-	ret = strcmp(a->alt, b->alt);
-	if (ret != 0) return ret;
-	else return (int)a->from_new - (int)b->from_new;
+	return strcmp(a->alt, b->alt);
 }
 
 #endif

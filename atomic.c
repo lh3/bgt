@@ -1,7 +1,15 @@
 #include "atomic.h"
 
+static inline int bcf_atom_cmp2(const bcf_atom_t *a, const bcf_atom_t *b)
+{
+	int ret;
+	ret = bcf_atom_cmp(a, b);
+	if (ret == 0) return (int)a->from_new - (int)b->from_new;
+	return ret;
+}
+
 #include "ksort.h"
-#define atom_lt(a, b) (bcf_atom_cmp(&(a), &(b)) < 0)
+#define atom_lt(a, b) (bcf_atom_cmp2(&(a), &(b)) < 0)
 KSORT_INIT(atom, bcf_atom_t, atom_lt)
 
 static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
