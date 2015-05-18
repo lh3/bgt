@@ -1186,6 +1186,10 @@ int bcf_append_info_ints(const bcf_hdr_t *h, bcf1_t *b, const char *key, int n, 
  * Atomize *
  ***********/
 
+#include "ksort.h"
+#define atom_lt(a, b) (bcf_atom_cmp(&(a), &(b)) < 0)
+KSORT_INIT(atom, bcf_atom_t, atom_lt)
+
 static void bcf_add_atom(bcf_atom_v *a, int rid, int pos, int rlen, int anum, int l_ref, const char *ref, int l_alt, const char *alt)
 {
 	bcf_atom_t *p;
@@ -1268,7 +1272,7 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 			if (*p == 'M' || *p == '=' || *p == 'X') {
 				for (j = 0; j < l; ++j)
 					if (b->d.allele[0][x+j] != b->d.allele[i][y+j])
-						bcf_add_atom(a, b->rid, b->pos + x, 1, i, 1, &b->d.allele[0][x+j], 1, &b->d.allele[i][y+j]);
+						bcf_add_atom(a, b->rid, b->pos + x + j, 1, i, 1, &b->d.allele[0][x+j], 1, &b->d.allele[i][y+j]);
 				x += l, y += l;
 			} else if (*p == 'I') {
 				assert(x > 0 && y > 0);
@@ -1281,6 +1285,7 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 			}
 		}
 	}
+	ks_introsort(atom, a->n, a->a);
 
 	free(cigar.s);
 }

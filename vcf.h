@@ -113,6 +113,7 @@ typedef struct {
 	kstring_t ref;
 	char *alt;
 	int rid, pos, rlen, anum;
+	uint8_t *gt;
 } bcf_atom_t;
 
 typedef struct {
@@ -343,6 +344,14 @@ static inline int32_t bcf_dec_size(const uint8_t *p, uint8_t **q, int *type)
 		*q = (uint8_t*)p + 1;
 		return *p>>4;
 	} else return bcf_dec_typed_int1(p + 1, q);
+}
+
+static inline int bcf_atom_cmp(const bcf_atom_t *a, const bcf_atom_t *b)
+{
+	if (a->rid != b->rid) return a->rid - b->rid;
+	if (a->pos != b->pos) return a->pos - b->pos;
+	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
+	return strcmp(a->alt, b->alt);
 }
 
 #endif
