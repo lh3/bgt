@@ -85,8 +85,15 @@ int main_ucf2bgt(int argc, char *argv[])
 
 		atoms.n = 0;
 		bcf_atomize(h, b, &atoms);
-		for (i = 0; i < atoms.n; ++i)
-			fprintf(stderr, "%d\t%d\t%s\t%s\n", atoms.a[i].rid, atoms.a[i].pos, atoms.a[i].ref.s, atoms.a[i].alt);
+		for (i = 0; i < atoms.n; ++i) {
+			fprintf(stderr, "%d\t%d\t%s\t%s", atoms.a[i].rid, atoms.a[i].pos, atoms.a[i].ref.s, atoms.a[i].alt);
+			for (j = 0; j < b->n_sample; ++j) {
+				fputc('\t', stderr);
+				for (k = 0; k < 2; ++k)
+					fprintf(stderr, "%d", atoms.a[i].gt[j<<1|k]);
+			}
+			fputc('\n', stderr);
+		}
 
 		// write genotypes
 		bcf_unpack(b, BCF_UN_FMT);

@@ -1190,6 +1190,62 @@ int bcf_append_info_ints(const bcf_hdr_t *h, bcf1_t *b, const char *key, int n, 
 #define atom_lt(a, b) (bcf_atom_cmp(&(a), &(b)) < 0)
 KSORT_INIT(atom, bcf_atom_t, atom_lt)
 
+static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
+{
+	int i, j, k, *eq, id_GT, *tr, has_dup = 0;
+	bcf_fmt_t *gt;
+
+	id_GT = bcf_id2int(h, BCF_DT_ID, "GT");
+	assert(id_GT >= 0);
+	bcf_unpack(b, BCF_UN_FMT);
+	for (i = 0; i < b->n_fmt; ++i)
+		if (b->d.fmt[i].id == id_GT) break;
+	assert(i < b->n_fmt);
+	gt = &b->d.fmt[i];
+	assert(gt->n == 2);
+
+	eq = (int*)alloca(n * sizeof(int));
+	ks_introsort(atom, n, a);
+	for (i = 1, eq[0] = 0; i < n; ++i) {
+		eq[i] = bcf_atom_cmp(&a[i-1], &a[i])? i : eq[i-1];
+		if (eq[i] == eq[i-1]) has_dup = 1;
+	}
+
+	tr = (int*)alloca(b->n_allele * sizeof(int));
+	tr[0] = 0;
+	for (k = 0; k < n; ++k) {
+		int m;
+		bcf_atom_t *ak = &a[k];
+		if (eq[k] != k) continue; // duplicated atom
+		for (i = 1; i < b->n_allele; ++i) tr[i] = 0;
+		for (i = 0; i < n; ++i) { // WARNING: quadratic in the number of atoms
+			if (eq[i] == eq[k]) // identical allele
+				tr[a[i].anum] = 1;
+			else if (a[i].pos < ak->pos + ak->rlen && ak->pos < a[i].pos + a[i].rlen) // overlap
+				tr[a[i].anum] = 3;
+		}
+		ak->gt = (uint8_t*)realloc(ak->gt, b->n_sample * gt->n);
+		for (i = 0, m = 0; i < b->n_sample; ++i, m += gt->n) {
+			for (j = 0; j < gt->n; ++j) {
+				int c = (int)(gt->p[m+j] >> 1) - 1;
+				ak->gt[m+j] = c < 0? 2 : tr[c];
+			}
+		}
+	}
+
+	if (has_dup) {
+		bcf_atom_t *swap;
+		swap = (bcf_atom_t*)alloca(n * sizeof(bcf_atom_t));
+		memcpy(swap, a, n * sizeof(bcf_atom_t));
+		for (i = j = 0, k = n - 1; i < n; ++i) {
+			if (eq[i] == i) a[j++] = swap[i];
+			else a[k--] = swap[i];
+		}
+		n = j;
+	}
+	return n;
+}
+
 static void bcf_add_atom(bcf_atom_v *a, int rid, int pos, int rlen, int anum, int l_ref, const char *ref, int l_alt, const char *alt)
 {
 	bcf_atom_t *p;
@@ -1211,7 +1267,7 @@ static void bcf_add_atom(bcf_atom_v *a, int rid, int pos, int rlen, int anum, in
 
 void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 {
-	int i, cid, l_ref, l_cigar = 0;
+	int i, cid, l_ref, l_cigar = 0, old_n = a->n;
 	kstring_t cigar = {0,0,0};
 	char *p_cigar = 0, *p = 0;
 
@@ -1285,7 +1341,6 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 			}
 		}
 	}
-	ks_introsort(atom, a->n, a->a);
-
 	free(cigar.s);
+	a->n = old_n + bcf_atom_gen_at(h, b, a->n - old_n, &a->a[old_n]);
 }
