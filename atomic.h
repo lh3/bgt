@@ -20,12 +20,13 @@ typedef struct {
 	htsFile *in;
 	bcf_atom_v a;
 	bcf1_t *b;
-	int start, no_vcf;
+	int start;
+	uint32_t no_vcf:16, keep_flt:16;
 	bcf_hdr_t *h;
 } bcf_atombuf_t;
 
 void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a);
-bcf_atombuf_t *bcf_atombuf_init(htsFile *in);
+bcf_atombuf_t *bcf_atombuf_init(htsFile *in, int keep_flt);
 void bcf_atombuf_destroy(bcf_atombuf_t *buf);
 const bcf_atom_t *bcf_atom_read(bcf_atombuf_t *buf);
 void bcf_atom2bcf(const bcf_atom_t *a, bcf1_t *b, int write_M, int id_GT);

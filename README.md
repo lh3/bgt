@@ -5,10 +5,8 @@
 # installation
 git clone https://github.com/lh3/bgt.git
 cd bgt; make
-# download precompiled k8 javascript shell (on Mac, replace k8-linux with k8-darwin)
-wget -O- http://bit.ly/k8-021 | tar -jxf - k8-linux
-# import; vcf2ucf.js turns a multi-allelic VCF to unary VCF
-./k8-linux vcf2ucf.js /path/to/srt.vcf.gz | ./bgt import -St ref.fa.fai - prefix
+# import
+./bgt import -St ref.fa.fai in.vcf.gz prefix
 # export
 ./bgt view -s:sample1,sample2 -r 1:100-200 prefix > sub.vcf
 ```

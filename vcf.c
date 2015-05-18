@@ -1103,6 +1103,14 @@ int bcf_is_snp(bcf1_t *v)
 	return i == v->n_allele;
 }
 
+int bcf_is_filtered(bcf1_t *b)
+{
+	bcf_unpack(b, BCF_UN_FLT);
+	if (b->d.n_flt == 0) return 0;
+	if (b->d.n_flt == 1 && b->d.flt[0] == 0) return 0;
+	return 1;
+}
+
 void bcfcpy(bcf1_t *dst, const bcf1_t *src)
 {
 	kstring_t ts = dst->shared, ti = dst->indiv;
@@ -1142,15 +1150,16 @@ char *bcf_get_alt1(const bcf1_t *b, int *len)
 
 int bcfcmp(const bcf1_t *a, const bcf1_t *b) // FIXME: segfault when a or b is empty; also, what happens when there are not ALT alleles?
 {
-	int l[2];
+	int ret, l[2];
 	char *ptr[2];
 	if (a->rid != b->rid) return a->rid - b->rid;
 	if (a->pos != b->pos) return a->pos - b->pos;
 	if (a->rlen!=b->rlen) return a->rlen-b->rlen;
 	ptr[0] = bcf_get_alt1(a, &l[0]);
 	ptr[1] = bcf_get_alt1(b, &l[1]);
-	if (l[0] != l[1]) return l[0] - l[1];
-	return strncmp(ptr[0], ptr[1], l[0]);
+	ret = strncmp(ptr[0], ptr[1], l[0] < l[1]? l[0] : l[1]);
+	if (ret != 0) return ret;
+	return l[0] - l[1];
 }
 
 int bcfcpy_min(bcf1_t *b, const bcf1_t *b0, const char *alt2)

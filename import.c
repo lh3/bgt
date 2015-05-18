@@ -20,19 +20,20 @@ int main_ucf2bgt(int argc, char *argv[])
 	bcf_atombuf_t *ab;
 	const bcf_atom_t *a;
 
-	while ((c = getopt(argc, argv, "l:St:")) >= 0) {
+	while ((c = getopt(argc, argv, "l:SFt:")) >= 0) {
 		switch (c) {
 		case 'l': clevel = atoi(optarg); flag |= 2; break;
 		case 'S': flag |= 1; break;
 		case 't': fn_ref = optarg; flag |= 1; break;
+		case 'F': flag |= 4; break;
 		}
 	}
 	if (argc - optind < 2) {
 		fprintf(stderr, "Usage: bgt import [options] <in.bcf>|<in.vcf>|<in.vcf.gz> <out-prefix>\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -S           input is VCF\n");
-		fprintf(stderr, "  -l INT       compression level [%d]\n", clevel);
 		fprintf(stderr, "  -t FILE      list of reference names and lengths [null]\n");
+		fprintf(stderr, "  -F           keep filtered variants\n");
 		return 1;
 	}
 	prefix = argv[optind+1];
@@ -42,7 +43,7 @@ int main_ucf2bgt(int argc, char *argv[])
 
 	in = hts_open(argv[optind], moder, fn_ref);
 	assert(in);
-	ab = bcf_atombuf_init(in);
+	ab = bcf_atombuf_init(in, flag&4);
 	assert(ab->h->n[BCF_DT_SAMPLE] > 0);
 	h0 = bcf_hdr_subset(ab->h, 0, 0, 0);
 	id_GT = bcf_id2int(h0, BCF_DT_ID, "GT");

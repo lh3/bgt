@@ -240,6 +240,7 @@ extern "C" {
 	bcf_hdr_t *bcf_hdr_subset(const bcf_hdr_t *h0, int n, char *const* samples, int *imap);
 	int bcf_subset(const bcf_hdr_t *h, bcf1_t *v, int n, int *imap);
 	int bcf_is_snp(bcf1_t *v);
+	int bcf_is_filtered(bcf1_t *b);
 
 	char *bcf_get_alt1(const bcf1_t *b, int *len);
 	void bcfcpy(bcf1_t *dst, const bcf1_t *src);

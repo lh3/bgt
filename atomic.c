@@ -176,16 +176,27 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 	a->n = bcf_atom_gen_at(h, b, a->n, a->a);
 }
 
-bcf_atombuf_t *bcf_atombuf_init(htsFile *in)
+static inline int flt_read1(htsFile *in, const bcf_hdr_t *h, bcf1_t *b, int keep_flt)
+{
+	int ret;
+	for (;;) {
+		if ((ret = vcf_read1(in, h, b)) < 0) break;
+		if (keep_flt || !bcf_is_filtered(b)) break;
+	}
+	return ret;
+}
+
+bcf_atombuf_t *bcf_atombuf_init(htsFile *in, int keep_flt)
 {
 	bcf_atombuf_t *buf;
 	buf = (bcf_atombuf_t*)calloc(1, sizeof(bcf_atombuf_t));
+	buf->keep_flt = !!keep_flt;
 	buf->in = in;
 	buf->h = vcf_hdr_read(buf->in);
 	buf->b = bcf_init1();
-	if (vcf_read1(buf->in, buf->h, buf->b) >= 0) {
+	if (flt_read1(buf->in, buf->h, buf->b, buf->keep_flt) >= 0) {
 		bcf_atomize(buf->h, buf->b, &buf->a);
-		if (vcf_read1(buf->in, buf->h, buf->b) < 0)
+		if (flt_read1(buf->in, buf->h, buf->b, buf->keep_flt) < 0)
 			buf->no_vcf = 1;
 	} else buf->no_vcf = 1;
 	return buf;
@@ -210,7 +221,7 @@ const bcf_atom_t *bcf_atom_read(bcf_atombuf_t *buf)
 		if (buf->no_vcf) return 0;
 		buf->a.n = buf->start = 0;
 		bcf_atomize(buf->h, buf->b, &buf->a);
-		if (vcf_read1(buf->in, buf->h, buf->b) < 0)
+		if (flt_read1(buf->in, buf->h, buf->b, buf->keep_flt) < 0)
 			buf->no_vcf = 1;
 	}
 	assert(buf->start < buf->a.n);
@@ -228,7 +239,7 @@ const bcf_atom_t *bcf_atom_read(bcf_atombuf_t *buf)
 			free(tmp);
 		}
 		bcf_atomize(buf->h, buf->b, &buf->a);
-		if (vcf_read1(buf->in, buf->h, buf->b) < 0)
+		if (flt_read1(buf->in, buf->h, buf->b, buf->keep_flt) < 0)
 			buf->no_vcf = 1;
 	}
 }
