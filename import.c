@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <stdio.h>
-#include "vcf.h"
+#include "atomic.h"
 #include "pbwt.h"
 
 int main_ucf2bgt(int argc, char *argv[])

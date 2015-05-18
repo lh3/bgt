@@ -1,7 +1,7 @@
 CC=			gcc
 CFLAGS=		-g -Wall -O2 -Wc++-compat -Wno-unused-function
 CPPFLAGS=
-OBJS=		bgzf.o hts.o vcf.o bedidx.o pbwt.o bgt.o import.o view.o
+OBJS=		bgzf.o hts.o vcf.o atomic.o bedidx.o pbwt.o bgt.o import.o view.o
 INCLUDES=
 LIBS=		-lpthread -lz
 PROG=		bgt pbfview
@@ -30,10 +30,12 @@ depend:
 
 # DO NOT DELETE
 
+atomic.o: atomic.h vcf.h bgzf.h hts.h kstring.h ksort.h
+bedidx.o: ksort.h kseq.h khash.h
 bgt.o: bgt.h vcf.h bgzf.h hts.h kstring.h pbwt.h khash.h ksort.h
 bgzf.o: bgzf.h
 hts.o: bgzf.h hts.h kseq.h khash.h ksort.h
-import.o: vcf.h bgzf.h hts.h kstring.h pbwt.h
+import.o: atomic.h vcf.h bgzf.h hts.h kstring.h pbwt.h
 pbfview.o: pbwt.h
 pbwt.o: pbwt.h ksort.h
 vcf.o: kstring.h bgzf.h vcf.h hts.h khash.h kseq.h
