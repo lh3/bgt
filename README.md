@@ -40,15 +40,15 @@ file. BGT is much smaller for the same information.
 
 The following shows the time on a few operations:
 ```sh
-# list all genotypes on chr11
-2m09s    bgt view -bl0 -r 11 1000g.bgt > /dev/null
-1m12s    htsbox vcfview -bl0 1000g.bcf 11 > /dev/null
-# extract the genotypes of the 99 CEU samples on chr11
-14s      bgt mview -bl0 -s CEU.txt -r 11 1000g.bgt > /dev/null
-22s      htsbox vcfview -bl0 -s CEU.txt 1000g.bcf 11 > /dev/null
 # extract two samples across all autosomes
 1m10s    bgt view -bl0 -s:HG00100,HG00121 1000g.bgt > /dev/null
 5m45s    htsbox vcfview -bl0 -s:HG00100,HG00121 1000g.bcf > /dev/null
+# extract the genotypes of the 99 CEU samples on chr11
+14s      bgt mview -bl0 -s CEU.txt -r 11 1000g.bgt > /dev/null
+22s      htsbox vcfview -bl0 -s CEU.txt 1000g.bcf 11 > /dev/null
+# list all genotypes on chr11
+2m09s    bgt view -bl0 -r 11 1000g.bgt > /dev/null
+1m12s    htsbox vcfview -bl0 1000g.bcf 11 > /dev/null
 # extract chr11 alleles polymorphic in CEU; no sample genotypes
 12s      bgt mview -aGC1 -bl0 -s CEU.txt -r 11 1000g.bgt > /dev/null
 ```
