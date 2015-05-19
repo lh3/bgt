@@ -78,6 +78,7 @@ int bcf_hdr_parse_line2(const char *str, uint32_t *info, int *id_beg, int *id_en
 		} else if (which == 3) {
 			if (*val == 'A') var = BCF_VL_A;
 			else if (*val == 'G') var = BCF_VL_G;
+			else if (*val == 'R') var = BCF_VL_R;
 			else if (isdigit(*val)) var = BCF_VL_FIXED, num = strtol(val, &tmp, 10);
 			else var = BCF_VL_VAR;
 			if (var != BCF_VL_FIXED) num = 0xfffff;
