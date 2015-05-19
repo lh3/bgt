@@ -118,8 +118,6 @@ void pbc_dec(pbc_t *pb, const uint8_t *b)
 #include "ksort.h"
 #define pbs_key_r(x) ((x).r)
 KRADIX_SORT_INIT(r, pbs_dat_t, pbs_key_r, 4)
-#define pbs_key_S(x) ((x).S)
-KRADIX_SORT_INIT(S, pbs_dat_t, pbs_key_S, 4)
 
 void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
 {
@@ -164,6 +162,7 @@ struct pbf_s {
 
 	int n_sub;
 	pbs_dat_t **sub;
+	int *sub_pos;
 
 	int64_t k;     // the row index just processed (reading only)
 	uint8_t *buf;  // reading only
@@ -248,7 +247,7 @@ int pbf_close(pbf_t *pb)
 		fwrite(pb->idx, 8, pb->n_idx, pb->fp);
 		fwrite(&off, 8, 1, pb->fp);
 	}
-	free(pb->idx); free(pb->ret); free(pb->invS); free(pb->buf);
+	free(pb->idx); free(pb->ret); free(pb->invS); free(pb->buf); free(pb->sub_pos);
 	for (g = 0; g < pb->g; ++g) {
 		free(pb->pb[g]);
 		if (pb->sub) free(pb->sub[g]);
@@ -304,9 +303,8 @@ const uint8_t **pbf_read(pbf_t *pb)
 			if (pb->n_sub > 0 && pb->n_sub < pb->m) { // subset decoding
 				pbs_dat_t *sub = pb->sub[g];
 				pbs_dec(pb->m, pb->n_sub, sub, pb->buf);
-				radix_sort_S(sub, sub + pb->n_sub);
 				for (i = 0; i < pb->n_sub; ++i)
-					pb->pb[g]->u[i] = sub[i].b;
+					pb->pb[g]->u[pb->sub_pos[sub[i].S]] = sub[i].b;
 			} else pbc_dec(pb->pb[g], pb->buf); // full decoding
 		}
 		++pb->k;
@@ -353,6 +351,9 @@ int pbf_subset(pbf_t *pb, int n_sub, int *sub)
 	int i, g;
 	if (n_sub <= 0 || n_sub >= pb->m || sub == 0) n_sub = 0;
 	if ((pb->n_sub = n_sub) != 0) {
+		if (pb->sub_pos == 0)
+			pb->sub_pos = (int*)calloc(pb->m, sizeof(int));
+		for (i = 0; i < n_sub; ++i) pb->sub_pos[sub[i]] = i;
 		for (g = 0; g < pb->g; ++g) {
 			pb->sub[g] = (pbs_dat_t*)realloc(pb->sub[g], n_sub * sizeof(pbs_dat_t));
 			for (i = 0; i < n_sub; ++i) pb->sub[g][i].S = sub[i];
