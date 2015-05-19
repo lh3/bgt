@@ -66,17 +66,23 @@ ExAC release 3 consists of 60 thousand samples and 9.3 million filtered alleles.
 The BGT file size is 7.4GB, or 856 bytes per site. The genotype compression
 ratio is much worse than 1000g because: 1) ExAC contains many missing data; 2)
 ExAC are unphased and 3) exons separated by long introns or intergenes are
-unlinked. Nonetheless, the BGT file is still a thrid of the equivalent BCF file
-converted from BGT (accurate numbers to appear).
+unlinked. Nonetheless, the BGT file is less than half of the equivalent BCF
+file (17GB in size) converted from BGT.
 
 The following shows the time on a few operations (there are 565k alleles on chr11):
 ```sh
+# extract the genotypes of 2 public samples, from chr11
+1.6s     bgt mview -bl0 -s:NA10851,NA12044 -r11 exac3.bgt > /dev/null
+40.3s    htsbox vcfview -bl0 -s:NA10851,NA12044 exac3.bcf 11 > /dev/null
 # extract the genotypes of the 74 1000g CEU samples on chr11
 3.2s     bgt mview -bl0 -s CEU.txt -r 11 exac3.bgt > /dev/null
+41.4s    htsbox vcfview -bl0 -s CEU.txt exac3.bcf 11 > /dev/null
 # get chr11 alleles polymorphic in the 74 CEU samples
 2.9s     bgt mview -GC1 -s CEU.txt -r 11 exac3.bgt > /dev/null
 # extract the genotypes of 1000 random samples on chr11
 19.2s    bgt mview -bl0 -s random-1000.txt -r 11 exac3.bgt > /dev/null
+47.2s    htsbox vcfview -bl0 -s random-1000.txt exac3.bcf 11 > /dev/null
 # extract the genotypes of 10000 random samples on chr11
 3m15s    bgt mview -bl0 -s random-1000.txt -r 11 exac3.bgt > /dev/null
+1m42s    htsbox vcfview -bl0 -s random-10000.txt exac3.bcf 11 > /dev/null
 ```
