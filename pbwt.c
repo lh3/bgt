@@ -119,27 +119,35 @@ void pbc_dec(pbc_t *pb, const uint8_t *b)
 #define pbs_key_r(x) ((x).r)
 KRADIX_SORT_INIT(r, pbs_dat_t, pbs_key_r, 4)
 
-void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u)
+void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST BE sorted by d[i].r
 {
 	const uint8_t *q;
-	pbs_dat_t *p = d, *end = d + r;
-	int n1, c[2], acc[2];
-	radix_sort_r(d, d + r); // sort by rank
+	pbs_dat_t *p = d, *end = d + r, *swap, *x[2];
+	int i, n1, c[2], acc[2];
+//	radix_sort_r(d, d + r); // sort by rank
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
 	acc[0] = 0, acc[1] = m - n1; // accumulative counts
 	c[0] = c[1] = 0; // running marginal counts
-	for (q = u; p != end && *q; ++q) {
+	for (q = u, n1 = 0; p != end && *q; ++q) {
 		int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
 		if (s <= p->r && p->r < s + l) {
 			do {
 				p->r = acc[b] + c[b] + (p->r - s);
 				p->b = b;
+				n1 += b;
 				++p;
 			} while (p != end && s <= p->r && p->r < s + l);
 		}
 		c[b] += l;
 	}
+	// one round of radix sort; this sorts d by d[i].r
+	swap = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
+	memcpy(swap, d, r * sizeof(pbs_dat_t));
+	x[0] = d, x[1] = d + (r - n1);
+	for (i = 0; i < r; ++i) 
+		*x[swap[i].b]++ = swap[i];
+	free(swap);
 }
 
 /************
@@ -319,6 +327,7 @@ static inline void pbf_fill_sub(int m, const int32_t *S, int n_sub, pbs_dat_t *s
 	for (i = 0; i < m; ++i) invS[S[i]] = i;
 	for (i = 0; i < n_sub; ++i)
 		sub[i].r = invS[sub[i].S];
+	radix_sort_r(sub, sub + n_sub);
 }
 
 int pbf_seek(pbf_t *pb, uint64_t k)
