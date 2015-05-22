@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <limits.h>
+#include "kexpr.h"
 
 #define FMF_FLAG  0
 #define FMF_INT   1
@@ -34,6 +35,7 @@ typedef struct {
 
 fmf_t *fmf_read(const char *fn);
 void fmf_destroy(fmf_t *f);
-int *fmf_find(const fmf_t *f, const char *expr, int *_n);
+char *fmf_write(const fmf_t *f, int r);
+int fmf_test(const fmf_t *f, int r, kexpr_t *ke);
 
 #endif

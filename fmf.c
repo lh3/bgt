@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <zlib.h>
 #include "fmf.h"
-#include "kexpr.h"
 #include "kseq.h"
 #include "khash.h"
+#include "kstring.h"
 
 #if defined(FMF_HAVE_HTS)
 KSTREAM_DECLARE(gzFile, gzread)
@@ -108,15 +108,69 @@ void fmf_destroy(fmf_t *f)
 	free(f);
 }
 
+char *fmf_write(const fmf_t *f, int r)
+{
+	static char *type_str = "\0ifZ";
+	kstring_t s = {0,0,0};
+	fmf1_t *u;
+	int i;
+	if (r >= f->n_rows) return 0;
+	u = &f->rows[r];
+	kputs(u->name, &s);
+	for (i = 0; i < u->n_meta; ++i) {
+		fmf_meta_t *m = &u->meta[i];
+		kputc('\t', &s);
+		kputs(f->keys[m->key], &s);
+		if (m->type != FMF_FLAG) {
+			kputc(':', &s); kputc(type_str[m->type], &s);
+			kputc(':', &s);
+			if (m->type == FMF_INT) ksprintf(&s, "%lld", (long long)m->v.i);
+			else if (m->type == FMF_REAL) ksprintf(&s, "%g", m->v.r);
+			else kputs(m->v.s, &s);
+		}
+	}
+	return s.s;
+}
+
+int fmf_test(const fmf_t *f, int r, kexpr_t *ke) // FIXME: a quadratic implementation!!! optimize later if too slow
+{
+	fmf1_t *u;
+	int err, i, int_ret;
+	int64_t vi;
+	double vr;
+	if (r >= f->n_rows) return 0;
+	u = &f->rows[r];
+	ke_unset(ke);
+	for (i = 0; i < u->n_meta; ++i) {
+		fmf_meta_t *m = &u->meta[i];
+		if (m->type == FMF_STR) ke_set_str(ke, f->keys[m->key], m->v.s);
+		else if (m->type == FMF_INT) ke_set_int(ke, f->keys[m->key], m->v.i);
+		else if (m->type == FMF_REAL) ke_set_int(ke, f->keys[m->key], m->v.r);
+	}
+	err = ke_eval(ke, &vi, &vr, &int_ret);
+	return !(err || vi == 0);
+}
+
 #ifdef FMF_MAIN
 int main(int argc, char *argv[])
 {
 	fmf_t *f;
+	kexpr_t *ke = 0;
+	int i, err;
 	if (argc == 1) {
 		fprintf(stderr, "Usage: fmf <in.fmf> [condition]\n");
 		return 1;
 	}
 	f = fmf_read(argv[1]);
+	if (argc > 2) ke = ke_parse(argv[2], &err);
+	for (i = 0; i < f->n_rows; ++i) {
+		char *s;
+		if (ke && !fmf_test(f, i, ke)) continue;
+		s = fmf_write(f, i);
+		puts(s);
+		free(s);
+	}
+	if (ke) ke_destroy(ke);
 	fmf_destroy(f);
 	return 0;
 }
