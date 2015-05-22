@@ -3,13 +3,13 @@
 #include <string.h>
 #include <stdio.h>
 #include "bgt.h"
+#include "kexpr.h"
 
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 
 typedef struct {
-	int min_ac, min_an;
-	float min_af;
+	kexpr_t *ke;
 } flt_aux_t;
 
 static inline int read1(bgt_t *bgt, bgtm_t *bm, bcf1_t *b)
@@ -22,15 +22,20 @@ static inline int read1(bgt_t *bgt, bgtm_t *bm, bcf1_t *b)
 static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n, const int *sidx, uint8_t *a[2], void *data)
 {
 	flt_aux_t *flt = (flt_aux_t*)data;
-	if (an < flt->min_an) return 1;
-	if (ac < flt->min_ac) return 1;
-	if (an > 0 && (float)ac/an < flt->min_af) return 1;
-	return 0;
+	int64_t vi;
+	double vr;
+	int is_int, err;
+	if (flt->ke == 0) return 0;
+	ke_set_real(flt->ke, "AN", an);
+	ke_set_real(flt->ke, "AC", ac);
+	err = ke_eval(flt->ke, &vi, &vr, &is_int);
+	if (err) return 0;
+	return !vi;
 }
 
 int main_view(int argc, char *argv[])
 {
-	int i, c, out_bcf = 0, n_samples = 0, clevel = -1, is_multi = 0, multi_flag = 0, set_flt = 0, excl = 0;
+	int i, c, out_bcf = 0, n_samples = 0, clevel = -1, is_multi = 0, multi_flag = 0, excl = 0;
 	bgt_t *bgt = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
@@ -42,7 +47,7 @@ int main_view(int argc, char *argv[])
 	memset(&flt, 0, sizeof(flt_aux_t));
 	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "mview") == 0);
 	is_multi = strcmp(argv[0], "mview") == 0? 1 : 0;
-	while ((c = getopt(argc, argv, "bs:r:l:aGC:F:N:B:e")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:aGB:ef:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -51,9 +56,11 @@ int main_view(int argc, char *argv[])
 		else if (c == 'B') bed = bed_read(optarg);
 		else if (is_multi && c == 'a') multi_flag |= BGT_F_SET_AC;
 		else if (is_multi && c == 'G') multi_flag |= BGT_F_NO_GT;
-		else if (is_multi && c == 'N') flt.min_an = atoi(optarg), set_flt = 1;
-		else if (is_multi && c == 'C') flt.min_ac = atoi(optarg), set_flt = 1;
-		else if (is_multi && c == 'F') flt.min_af = atof(optarg), set_flt = 1;
+		else if (is_multi && c == 'f') {
+			int err = 0;
+			flt.ke = ke_parse(optarg, &err);
+			assert(err == 0 && flt.ke != 0);
+		}
 	}
 	if (clevel > 9) clevel = 9;
 	if (argc - optind < 1) {
@@ -70,9 +77,7 @@ int main_view(int argc, char *argv[])
 		if (is_multi) {
 			fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
 			fprintf(stderr, "  -G           don't output sample genotype\n");
-			fprintf(stderr, "  -N INT       min AN [0]\n");
-			fprintf(stderr, "  -C INT       min AC [0]\n");
-			fprintf(stderr, "  -F FLOAT     min AF [0]\n");
+			fprintf(stderr, "  -f STR       frequency filters [null]\n");
 		}
 		return 1;
 	}
@@ -85,7 +90,7 @@ int main_view(int argc, char *argv[])
 	} else {
 		bm = bgtm_open(argc - optind, &argv[optind]);
 		bgtm_set_flag(bm, multi_flag);
-		if (set_flt) bgtm_set_filter(bm, filter_func, &flt);
+		if (flt.ke) bgtm_set_filter(bm, filter_func, &flt);
 		if (n_samples > 0) bgtm_set_samples(bm, n_samples, samples);
 		if (reg) bgtm_set_region(bm, reg);
 		if (bed) bgtm_set_bed(bm, bed, excl);
@@ -108,5 +113,6 @@ int main_view(int argc, char *argv[])
 	if (bgt) bgt_close(bgt);
 	if (bm) bgtm_close(bm);
 	if (bed) bed_destroy(bed);
+	if (flt.ke) ke_destroy(flt.ke);
 	return 0;
 }
