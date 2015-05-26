@@ -452,21 +452,22 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 				int32_t j;
 				for (i = 0; i < bm->n_out<<1; ++i) {
 					int ht = bm->a[1][i]<<1 | bm->a[0][i];
-					if (bm->group[i]) {
+					if (bm->group[i>>1]) {
 						for (j = 0; j < bm->n_groups; ++j)
-							if (bm->group[i] & 1<<j) ++gcnt[j+1][ht];
+							if (bm->group[i>>1] & 1<<j) ++gcnt[j+1][ht];
 					} else ++gcnt[0][ht];
 				}
 			} else {
 				int32_t j, k, gcnt256[256][4];
 				memset(gcnt256, 0, 256 * 4 * 4);
 				for (i = 0; i < bm->n_out<<1; ++i)
-					++gcnt256[bm->group[i]][bm->a[1][i]<<1 | bm->a[0][i]];
+					++gcnt256[bm->group[i>>1]][bm->a[1][i]<<1 | bm->a[0][i]];
 				for (i = 0; i < 256; ++i)
 					for (j = 0; j < bm->n_groups; ++j)
-						if (bm->group[i] & 1<<j)
+						if (i & 1<<j)
 							for (k = 0; k < 4; ++k)
 								gcnt[j+1][k] += gcnt256[i][k];
+				for (k = 0; k < 4; ++k) gcnt[0][k] = gcnt256[0][k];
 			}
 			for (i = 0; i <= bm->n_groups; ++i) {
 				char key[4];
