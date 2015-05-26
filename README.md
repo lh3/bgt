@@ -67,7 +67,7 @@ at the same time.
 Internally, BGT uses BCF to keep allele positions and sequences, and uses PBWT
 to store sample genotypes. The time complexity to extract *k* samples across
 *n* sites is *O*(*n*(*mH*<sub>0</sub>+*k*)), where *m* is the total number of
-samples in BGT and *H*<sub>0</sub> the average entroy of PBWT. When *k* is
+samples in BGT and *H*<sub>0</sub> the average 0-order empirical entroy of PBWT. When *k* is
 larger than a few hundred, the time complexity approaches *O*(*nk*),
 independent of *m*. This is a significant improvement over the *O*(*nm*) time
 complexity if we use BCF. Although BGT comes with a larger constant - probably
