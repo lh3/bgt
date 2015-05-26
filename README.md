@@ -100,8 +100,9 @@ BGT-r98; newer versions should have a similar performance):
 # list all genotypes on chr11
 2m09s    bgt view -bl0 -r 11 1000g.bgt > /dev/null
 1m12s    htsbox vcfview -bl0 1000g.bcf 11 > /dev/null
-# extract chr11 alleles polymorphic in CEU; no sample genotypes
-12s      bgt view -aGC1 -bl0 -s CEU.txt -r 11 1000g.bgt > /dev/null
+# variants common in GBR but rare in YRI
+28s      bgt view -s"population=='GBR'||population=='YRI'" -g"population=='GBR'" \
+         -g"population=='YRI'" -Gf'AC1/AN1>.2&&AC2/AN2<.05' -r11 1000g-p3v5a.bgt > /dev/null
 ```
 
 ### Performance on ExAC VCF
