@@ -163,7 +163,6 @@ int main_view(int argc, char *argv[])
 		}
 		if (sexpr) {
 			samples = get_samples(sexpr, &n_samples, n_fmf, fmf);
-			fprintf(stderr, "n_samples=%d,sexpr=%s\n", n_samples, sexpr);
 			bgtm_set_samples(bm, n_samples, samples);
 			for (i = 0; i < n_samples; ++i) free(samples[i]);
 			free(samples);
