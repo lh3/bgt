@@ -3,7 +3,7 @@ CFLAGS=		-g -Wall -O2 -Wc++-compat -Wno-unused-function
 CPPFLAGS=
 OBJS=		kexpr.o bgzf.o hts.o fmf.o vcf.o atomic.o bedidx.o pbwt.o bgt.o import.o view.o
 INCLUDES=
-LIBS=		-lpthread -lz
+LIBS=		-lpthread -lz -lm
 PROG=		bgt
 PROG_EXTRA= pbfview kexpr fmf
 

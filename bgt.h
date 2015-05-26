@@ -37,7 +37,7 @@ typedef struct {
 	bgt_rec_t *b;
 } bgt_pos_t;
 
-typedef int (*bgt_filter_f)(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n, const int *sidx, uint8_t *a[2], void *data);
+typedef int (*bgt_filter_f)(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n_groups, int32_t *gan, int32_t *gac1, void *data);
 
 typedef struct {
 	int n_bgt, n_out, n_groups, flag;

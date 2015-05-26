@@ -436,7 +436,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 	}
 	assert(off == bm->n_out<<1);
 	if ((bm->flag & BGT_F_SET_AC) || bm->filter_func) {
-		int32_t an, ac[2], cnt[4];
+		int32_t an, ac[2], cnt[4], gac1[BGT_MAX_GROUPS+1], gan[BGT_MAX_GROUPS+1];
 		memset(cnt, 0, 4 * 4);
 		for (i = 0; i < bm->n_out<<1; ++i)
 			++cnt[bm->a[1][i]<<1 | bm->a[0][i]];
@@ -445,8 +445,41 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		bcf_append_info_ints(bm->h_out, b, "AN", 1, &an);
 		bcf_append_info_ints(bm->h_out, b, "AC", b->n_allele - 1, ac);
 		if (bm->n_groups > 0) {
+			int32_t gcnt[BGT_MAX_GROUPS+1][4];
+			memset(gcnt, 0, 4 * (BGT_MAX_GROUPS+1) * 4);
+			// the following two blocks achieve the same goal. The 1st is faster if there are not many samples
+			if (bm->n_out<<1 < 1024) {
+				int32_t j;
+				for (i = 0; i < bm->n_out<<1; ++i) {
+					int ht = bm->a[1][i]<<1 | bm->a[0][i];
+					if (bm->group[i]) {
+						for (j = 0; j < bm->n_groups; ++j)
+							if (bm->group[i] & 1<<j) ++gcnt[j+1][ht];
+					} else ++gcnt[0][ht];
+				}
+			} else {
+				int32_t j, k, gcnt256[256][4];
+				memset(gcnt256, 0, 256 * 4 * 4);
+				for (i = 0; i < bm->n_out<<1; ++i)
+					++gcnt256[bm->group[i]][bm->a[1][i]<<1 | bm->a[0][i]];
+				for (i = 0; i < 256; ++i)
+					for (j = 0; j < bm->n_groups; ++j)
+						if (bm->group[i] & 1<<j)
+							for (k = 0; k < 4; ++k)
+								gcnt[j+1][k] += gcnt256[i][k];
+			}
+			for (i = 0; i <= bm->n_groups; ++i) {
+				char key[4];
+				int32_t gac[2];
+				key[3] = 0;
+				gan[i] = gcnt[i][0] + gcnt[i][1] + gcnt[i][3];
+				gac[0] = gac1[i] = gcnt[i][1];
+				gac[1] = gcnt[i][3];
+				key[0] = 'A', key[1] = 'N', key[2] = '0' + i; bcf_append_info_ints(bm->h_out, b, key, 1, &gan[i]);
+				key[0] = 'A', key[1] = 'C', key[2] = '0' + i; bcf_append_info_ints(bm->h_out, b, key, b->n_allele - 1, gac);
+			}
 		}
-		if (bm->filter_func && bm->filter_func(bm->h_out, b, an, ac[0], bm->n_out, bm->sample_idx, bm->a, bm->filter_data))
+		if (bm->filter_func && bm->filter_func(bm->h_out, b, an, ac[0], bm->n_groups, gan, gac1, bm->filter_data))
 			return 1;
 	}
 	if ((bm->flag & BGT_F_NO_GT) == 0)
