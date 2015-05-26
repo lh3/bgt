@@ -43,15 +43,21 @@ static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac1, int n_groups, i
 
 static char **get_samples(const char *expr, int *n, int n_pre, fmf_t *const*fmf)
 {
-	int err, i, j;
+	int err, i, j, is_file = 0;
 	khint_t k;
 	char **s;
 	kexpr_t *ke;
 	khash_t(s2i) *h;
+	FILE *fp;
 
 	*n = 0;
-	if (*expr != '?') return hts_readlines(expr, n);
-	ke = ke_parse(expr+1, &err);
+	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
+		is_file = 1;
+		fclose(fp);
+	}
+	if (*expr == ':' || (*expr != '?' && is_file))
+		return hts_readlines(expr, n);
+	ke = ke_parse(*expr == '?'? expr+1 : expr, &err);
 	if (err) return 0;
 	h = kh_init(s2i);
 	for (j = 0; j < n_pre; ++j) {
@@ -87,7 +93,7 @@ int main_view(int argc, char *argv[])
 	char *gexpr[BGT_MAX_GROUPS];
 
 	memset(&flt, 0, sizeof(flt_aux_t));
-	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "sview") == 0);
+	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "sview") == 0 || strcmp(argv[0], "mview") == 0);
 	is_multi = strcmp(argv[0], "sview")? 1 : 0;
 	while ((c = getopt(argc, argv, "bs:r:l:aGB:ef:g:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
@@ -149,6 +155,7 @@ int main_view(int argc, char *argv[])
 		}
 		if (sexpr) {
 			samples = get_samples(sexpr, &n_samples, n_fmf, fmf);
+			fprintf(stderr, "n_samples=%d,sexpr=%s\n", n_samples, sexpr);
 			bgtm_set_samples(bm, n_samples, samples);
 			for (i = 0; i < n_samples; ++i) free(samples[i]);
 			free(samples);
