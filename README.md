@@ -26,10 +26,10 @@ NA19144  gender:Z:M  population:Z:YRI
 ```sh
 # GBR samples with ALT allele frequency over 5%
 bgt view -G -f"AN>=20&&AC/AN>.05" -s"population=='GBR'" pre
-# alleles present in both GBR and FIN; -g defines sample groups and populates AC1 etc
+# alleles present in both GBR and FIN
 bgt view -s"population=='GBR'" -s"population=='FIN'" -Gf'AC1>0&&AC2>0' pre
 # alleles >20% in GBR but <5% in YRI
-bgt view -g"population=='GBR'" -g"population=='YRI'" -Gf'AC1/AN1>.2&&AC2/AN2<.05' pre
+bgt view -s"population=='GBR'" -s"population=='YRI'" -Gf'AC1/AN1>.2&&AC2/AN2<.05' pre
 ```
 1000g BGT can be found at [this FTP link](http://bit.ly/lh3ftp1).
 
@@ -98,7 +98,7 @@ BGT-r98; newer versions should have a similar performance):
 1m12s    htsbox vcfview -bl0 1000g.bcf 11 > /dev/null
 # variants common in GBR but rare in YRI
 28s      bgt view -s"population=='GBR'" -s"population=='YRI'" \
-             -Gf'AC1/AN1>.2&&AC2/AN2<.05' -r11 1000g-p3v5a.bgt > /dev/null
+             -Gf'AC1/AN1>.2&&AC2/AN2<.05' -r11 1000g.bgt > /dev/null
 ```
 
 ### Performance on ExAC VCF
