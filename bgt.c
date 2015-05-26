@@ -317,7 +317,7 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kputs("##INFO=<ID=AN,Number=A,Type=String,Description=\"Count of total alleles\">\n", &h);
 	kputs("##INFO=<ID=AC0,Number=A,Type=String,Description=\"Count of alternate alleles not in any sample groups\">\n", &h);
 	kputs("##INFO=<ID=AN0,Number=A,Type=String,Description=\"Count of total alleles not in any sample groups\">\n", &h);
-	for (i = 0; i < BGT_MAX_GROUPS; ++i) {
+	for (i = 1; i <= BGT_MAX_GROUPS; ++i) {
 		ksprintf(&h, "##INFO=<ID=AC%d,Number=A,Type=String,Description=\"Count of alternate alleles for sample group %d\">\n", i+1, i+1);
 		ksprintf(&h, "##INFO=<ID=AN%d,Number=A,Type=String,Description=\"Count of total alleles for sample group %d\">\n", i+1, i+1);
 	}
@@ -453,10 +453,9 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 				int32_t j;
 				for (i = 0; i < bm->n_out<<1; ++i) {
 					int ht = bm->a[1][i]<<1 | bm->a[0][i];
-					if (bm->group[i>>1]) {
+					if (bm->group[i>>1])
 						for (j = 0; j < bm->n_groups; ++j)
 							if (bm->group[i>>1] & 1<<j) ++gcnt[j+1][ht];
-					} else ++gcnt[0][ht];
 				}
 			} else {
 				int32_t j, k, gcnt256[256][4];
@@ -468,9 +467,8 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 						if (i & 1<<j)
 							for (k = 0; k < 4; ++k)
 								gcnt[j+1][k] += gcnt256[i][k];
-				for (k = 0; k < 4; ++k) gcnt[0][k] = gcnt256[0][k];
 			}
-			for (i = 0; i <= bm->n_groups; ++i) {
+			for (i = 1; i <= bm->n_groups; ++i) {
 				char key[4];
 				int32_t gac[2];
 				key[3] = 0;
