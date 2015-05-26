@@ -259,6 +259,7 @@ bgtm_t *bgtm_open(int n_files, char *const*fns)
 void bgtm_close(bgtm_t *bm)
 {
 	int i, j;
+	free(bm->group);
 	free(bm->sample_idx);
 	bcf_hdr_destroy(bm->h_out);
 	free(bm->a[0]); free(bm->a[1]);
@@ -296,6 +297,7 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 		bgt_set_samples(bm->bgt[i], n, samples);
 		bm->n_out += bm->bgt[i]->n_out;
 	}
+	bm->group = (uint8_t*)calloc(bm->n_out, 1);
 	bm->sample_idx = (int*)calloc(bm->n_out, sizeof(int));
 	for (i = m = 0; i < bm->n_bgt; ++i) {
 		bgt_t *bgt = bm->bgt[i];
@@ -312,6 +314,12 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kputs("##fileformat=VCFv4.1\n", &h);
 	kputs("##INFO=<ID=AC,Number=A,Type=String,Description=\"Count of alternate alleles\">\n", &h);
 	kputs("##INFO=<ID=AN,Number=A,Type=String,Description=\"Count of total alleles\">\n", &h);
+	kputs("##INFO=<ID=AC0,Number=A,Type=String,Description=\"Count of alternate alleles not in any sample groups\">\n", &h);
+	kputs("##INFO=<ID=AN0,Number=A,Type=String,Description=\"Count of total alleles not in any sample groups\">\n", &h);
+	for (i = 0; i < BGT_MAX_GROUPS; ++i) {
+		ksprintf(&h, "##INFO=<ID=AC%d,Number=A,Type=String,Description=\"Count of alternate alleles for sample group %d\">\n", i+1, i+1);
+		ksprintf(&h, "##INFO=<ID=AN%d,Number=A,Type=String,Description=\"Count of total alleles for sample group %d\">\n", i+1, i+1);
+	}
 	kputs("##INFO=<ID=END,Number=1,Type=Integer,Description=\"Ending position\">\n", &h);
 	kputs("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n", &h);
 	kputs("##ALT=<ID=M,Description=\"Multi-allele\">\n", &h);
@@ -341,6 +349,24 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	bcf_hdr_parse(bm->h_out);
 	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_out<<1);
 	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_out<<1);
+}
+
+void bgtm_add_group(bgtm_t *bm, int n, char *const* samples)
+{
+	int i, j, k, absent;
+	khash_t(s2i) *h;
+	h = kh_init(s2i);
+	for (i = 0; i < n; ++i)
+		kh_put(s2i, h, samples[i], &absent);
+	for (i = k = 0; i < bm->n_bgt; ++i) {
+		bgt_t *bgt = bm->bgt[i];
+		for (j = 0; j < bgt->n_out; ++j, ++k)
+			if (kh_get(s2i, h, bgt->samples[bgt->out[j]]) != kh_end(h))
+				bm->group[k] |= 1<<bm->n_groups;
+
+	}
+	kh_destroy(s2i, h);
+	++bm->n_groups;
 }
 
 int bgtm_set_region(bgtm_t *bm, const char *reg)
@@ -418,6 +444,8 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		ac[0] = cnt[1], ac[1] = cnt[3];
 		bcf_append_info_ints(bm->h_out, b, "AN", 1, &an);
 		bcf_append_info_ints(bm->h_out, b, "AC", b->n_allele - 1, ac);
+		if (bm->n_groups > 0) {
+		}
 		if (bm->filter_func && bm->filter_func(bm->h_out, b, an, ac[0], bm->n_out, bm->sample_idx, bm->a, bm->filter_data))
 			return 1;
 	}

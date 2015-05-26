@@ -66,11 +66,13 @@ int main_view(int argc, char *argv[])
 	char modew[8], *reg = 0, *sexpr, **samples = 0, *tmpfn;
 	flt_aux_t flt;
 	void *bed = 0;
+	int n_groups = 0;
+	char *gexpr[BGT_MAX_GROUPS];
 
 	memset(&flt, 0, sizeof(flt_aux_t));
 	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "mview") == 0);
 	is_multi = strcmp(argv[0], "mview") == 0? 1 : 0;
-	while ((c = getopt(argc, argv, "bs:r:l:aGB:ef:")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:aGB:ef:g:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -83,7 +85,7 @@ int main_view(int argc, char *argv[])
 			int err = 0;
 			flt.ke = ke_parse(optarg, &err);
 			assert(err == 0 && flt.ke != 0);
-		}
+		} else if (c == 'g' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 	}
 	if (clevel > 9) clevel = 9;
 	if (argc - optind < 1) {
@@ -127,6 +129,15 @@ int main_view(int argc, char *argv[])
 	}
 	for (i = 0; i < n_samples; ++i) free(samples[i]);
 	free(samples);
+
+	for (i = 0; i < n_groups; ++i) {
+		int j, n;
+		char **s;
+		s = get_samples(gexpr[i], fmf, &n);
+		bgtm_add_group(bm, n, s);
+		for (j = 0; j < n; ++j) free(s[j]);
+		free(s);
+	}
 
 	strcpy(modew, "w");
 	if (out_bcf) strcat(modew, "b");

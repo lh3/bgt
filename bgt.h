@@ -7,6 +7,8 @@
 #define BGT_F_SET_AC    0x0001
 #define BGT_F_NO_GT     0x0002
 
+#define BGT_MAX_GROUPS  8
+
 typedef struct {
 	int n_samples;
 	char **samples;
@@ -38,8 +40,9 @@ typedef struct {
 typedef int (*bgt_filter_f)(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n, const int *sidx, uint8_t *a[2], void *data);
 
 typedef struct {
-	int n_bgt, n_out, flag;
+	int n_bgt, n_out, n_groups, flag;
 	int *sample_idx;
+	uint8_t *group;
 	bgt_t **bgt;
 	bgt_pos_t *p;
 	bcf_hdr_t *h_out;
@@ -62,6 +65,7 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
 void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
+void bgtm_add_group(bgtm_t *bm, int n, char *const* samples);
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
 #endif
