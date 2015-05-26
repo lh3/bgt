@@ -135,9 +135,7 @@ char *fmf_write(const fmf_t *f, int r)
 int fmf_test(const fmf_t *f, int r, kexpr_t *ke) // FIXME: a quadratic implementation!!! optimize later if too slow
 {
 	fmf1_t *u;
-	int err, i, int_ret;
-	int64_t vi;
-	double vr;
+	int err, i, is_true;
 	if (r >= f->n_rows) return 0;
 	u = &f->rows[r];
 	ke_unset(ke);
@@ -147,8 +145,8 @@ int fmf_test(const fmf_t *f, int r, kexpr_t *ke) // FIXME: a quadratic implement
 		else if (m->type == FMF_INT) ke_set_int(ke, f->keys[m->key], m->v.i);
 		else if (m->type == FMF_REAL) ke_set_int(ke, f->keys[m->key], m->v.r);
 	}
-	err = ke_eval(ke, &vi, &vr, &int_ret);
-	return !(err || vi == 0);
+	is_true = !!ke_eval_int(ke, &err);
+	return !(err || !is_true);
 }
 
 #ifdef FMF_MAIN

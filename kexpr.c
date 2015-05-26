@@ -396,6 +396,24 @@ int ke_eval(const kexpr_t *ke, int64_t *_i, double *_r, int *int_ret)
 	*_i = stack->i, *_r = stack->r, *int_ret = (stack->vtype == KEV_INT);
 	free(stack);
 	return err;
+}	
+
+int64_t ke_eval_int(const kexpr_t *ke, int *err)
+{
+	int int_ret;
+	int64_t i;
+	double r;
+	*err = ke_eval(ke, &i, &r, &int_ret);
+	return i;
+}
+
+double ke_eval_real(const kexpr_t *ke, int *err)
+{
+	int int_ret;
+	int64_t i;
+	double r;
+	*err = ke_eval(ke, &i, &r, &int_ret);
+	return r;
 }
 
 void ke_destroy(kexpr_t *ke)

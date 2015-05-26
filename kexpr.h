@@ -49,6 +49,8 @@ extern "C" {
 
 	// evaluate expression; return error code; final value is returned via pointers
 	int ke_eval(const kexpr_t *ke, int64_t *_i, double *_r, int *int_ret);
+	int64_t ke_eval_int(const kexpr_t *ke, int *err);
+	double ke_eval_real(const kexpr_t *ke, int *err);
 
 	// print the expression in Reverse Polish notation (RPN)
 	void ke_print(const kexpr_t *ke);
