@@ -64,8 +64,8 @@ static char **get_samples(const char *expr, int *n, int n_pre, char *const* pref
 		fmf_t *f;
 		char *tmpfn;
 		int absent;
-		tmpfn = (char*)calloc(strlen(prefix[i]) + 5, 1);
-		strcat(strcpy(tmpfn, prefix[i]), ".spl");
+		tmpfn = (char*)calloc(strlen(prefix[j]) + 5, 1);
+		strcat(strcpy(tmpfn, prefix[j]), ".spl");
 		f = fmf_read(tmpfn);
 		free(tmpfn);
 		if (f == 0) continue;
