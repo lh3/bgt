@@ -26,10 +26,16 @@ static inline int read1(bgt_t *bgt, bgtm_t *bm, bcf1_t *b)
 static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac1, int n_groups, int32_t *gan, int32_t *gac1, void *data)
 {
 	flt_aux_t *flt = (flt_aux_t*)data;
-	int is_true, err;
+	int is_true, err, i;
+	char key[4];
 	if (flt->ke == 0) return 0;
-	ke_set_real(flt->ke, "AN", an);
-	ke_set_real(flt->ke, "AC", ac1);
+	ke_set_int(flt->ke, "AN", an);
+	ke_set_int(flt->ke, "AC", ac1);
+	key[3] = 0;
+	for (i = 0; i <= n_groups; ++i) {
+		key[0] = 'A', key[1] = 'N', key[2] = '0' + i; ke_set_int(flt->ke, key, gan[i]);
+		key[0] = 'A', key[1] = 'C', key[2] = '0' + i; ke_set_int(flt->ke, key, gac1[i]);
+	}
 	is_true = !!ke_eval_int(flt->ke, &err);
 	if (err) return 0;
 	return !is_true;
