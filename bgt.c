@@ -297,8 +297,9 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 		bgt_set_samples(bm->bgt[i], n, samples);
 		bm->n_out += bm->bgt[i]->n_out;
 	}
-	bm->group = (uint8_t*)calloc(bm->n_out, 1);
-	bm->sample_idx = (int*)calloc(bm->n_out, sizeof(int));
+	bm->group = (uint8_t*)realloc(bm->group, bm->n_out);
+	memset(bm->group, 0, bm->n_out);
+	bm->sample_idx = (int*)realloc(bm->sample_idx, bm->n_out * sizeof(int));
 	for (i = m = 0; i < bm->n_bgt; ++i) {
 		bgt_t *bgt = bm->bgt[i];
 		for (j = 0; j < bgt->n_out; ++j) {

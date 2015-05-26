@@ -64,6 +64,7 @@ static char **get_samples(const char *expr, int *n, int n_pre, fmf_t *const*fmf)
 				if (absent) kh_key(h, k) = strdup(f->rows[i].name);
 			}
 	}
+	ke_destroy(ke);
 	*n = kh_size(h);
 	s = (char**)malloc(*n * sizeof(char*));
 	for (k = i = 0; k < kh_end(h); ++k)
@@ -79,15 +80,15 @@ int main_view(int argc, char *argv[])
 	bgtm_t *bm = 0;
 	bcf1_t *b;
 	htsFile *out;
-	char modew[8], *reg = 0, *sexpr;
+	char modew[8], *reg = 0, *sexpr = 0;
 	flt_aux_t flt;
 	void *bed = 0;
 	int n_groups = 0;
 	char *gexpr[BGT_MAX_GROUPS];
 
 	memset(&flt, 0, sizeof(flt_aux_t));
-	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "mview") == 0);
-	is_multi = strcmp(argv[0], "mview") == 0? 1 : 0;
+	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "sview") == 0);
+	is_multi = strcmp(argv[0], "sview")? 1 : 0;
 	while ((c = getopt(argc, argv, "bs:r:l:aGB:ef:g:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
@@ -113,12 +114,13 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "  -r STR       region [all]\n");
 		fprintf(stderr, "  -l INT       compression level for BCF [detault]\n");
 		fprintf(stderr, "  -B FILE      extract variants overlapping BED FILE [null]\n");
-		fprintf(stderr, "  -e           exclude variants overlapping BED FILE (effective with -B) [null]\n");
+		fprintf(stderr, "  -e           exclude variants overlapping BED FILE (effective with -B)\n");
 		if (is_multi) {
 			fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
 			fprintf(stderr, "  -G           don't output sample genotype\n");
 			fprintf(stderr, "  -f STR       frequency filters [null]\n");
-			fprintf(stderr, "  -s STR/FILE  list of samples (STR if started with ':'; FILE otherwise) [all]\n");
+			fprintf(stderr, "  -s EXPR      list of samples (see Notes below) [all]\n");
+			fprintf(stderr, "  -g EXPR      define a sample group (see Notes below) [null]\n");
 		}
 		return 1;
 	}
