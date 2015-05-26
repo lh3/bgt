@@ -26,7 +26,7 @@ NA19144  gender:Z:M  population:Z:YRI
 ```sh
 # GBR samples with ALT allele frequency over 5%
 bgt view -G -f"AN>=20&&AC/AN>.05" -s"population=='GBR'" pre
-# alleles present in both GBR and FIN
+# alleles present in both GBR and FIN; -g defines sample groups and populates AC1 etc
 bgt view -s"population=='GBR'||population=='FIN'" -g"population=='GBR'" \
     -g"population=='FIN'" -Gf'AC1>0&&AC2>0' pre
 # a shorter CMD for the above
