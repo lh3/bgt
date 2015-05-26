@@ -36,7 +36,7 @@ bgt view -s"population=='GBR'||population=='FIN'" -g"population=='GBR'" \
 bgt view -s"population=='GBR'||population=='YRI'" -g"population=='GBR'" \
     -g"population=='YRI'" -Gf'AC1/AN1>.2&&AC2/AN2<.05' pre
 ```
-1000g BGT can be found at [this link](http://bit.ly/lh3ftp1).
+1000g BGT can be found at [this FTP link](http://bit.ly/lh3ftp1).
 
 ## Discussions
 
