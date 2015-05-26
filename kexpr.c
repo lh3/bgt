@@ -181,7 +181,7 @@ static ke1_t ke_read_token(char *p, char **r, int *err, int last_is_val) // it d
 		e.name = mystrndup(q, p - q);
 		e.i = 0, e.r = 0.;
 		*r = p;
-	} else if (isdigit(*p)) { // a number
+	} else if (isdigit(*p) || *p == '.') { // a number
 		long x;
 		double y;
 		char *pp;

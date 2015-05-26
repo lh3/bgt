@@ -15,8 +15,52 @@ cd bgt; make
 BGT is an alternative to BCF2 for storing multi-sample genotypes *without
 per-genotype metadata*. It is much smaller than BCF2 and often faster for
 accessing a subset of samples. It also supports more types of genotype queries.
+Here are a few examples demonstrating how to query with BGT. In these examples,
+we assume users have attached per-sample annotation to `pre.spl` in a format
+like:
+```
+HG00096  gender:Z:M  population:Z:GBR
+HG00315  gender:Z:F  population:Z:FIN
+NA19144  gender:Z:M  population:Z:YRI
+```
+```sh
+# GBR samples with ALT allele frequency over 5%
+bgt view -G -f"AN>=20&&AC/AN>.05" -s"population=='GBR'" pre
+# alleles present in both GBR and FIN
+bgt view -s"population=='GBR'||population=='FIN'" -g"population=='GBR'" \
+    -g"population=='FIN'" -Gf'AC1>0&&AC2>0' pre
+# a shorter CMD for the above
+bgt view -s"population=='GBR'||population=='FIN'" -g"population=='GBR'" \
+    -Gf'AC0>0&&AC1>0' pre
+# alleles >20% in GBR but <5% in YRI
+bgt view -s"population=='GBR'||population=='YRI'" -g"population=='GBR'" \
+    -g"population=='YRI'" -Gf'AC1/AN1>.2&&AC2/AN2<.05' pre
+```
 
 ## Discussions
+
+### Unary VCF
+
+During import, BGT converts a multi-allelic VCF to unary VCF on the fly. In
+this process, BGT first decompose a complex variant consisting of multiple SNPs
+and INDELs into atomic events and then describes each atomic event with one and
+only one VCF line. If a sample has two overlapping non-reference alleles, BGT
+will use a `<M>` symbolic allele. For example, BGT internally converts this VCF:
+```
+#CHROM POS ID REF ALT     QUAL FILTER INFO FORMAT S1   S2   S3   S4
+11  101  .  GCGT  G,GCGA,GTGA,CCGT 199  .  .  GT  0/1  1/2  2/3  2/4
+```
+to
+```
+#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT S1 S2 S3 S4
+11  101  .  G     C,<M>  0  .  .  GT  0/2  2/0  0/0  0/1
+11  101  .  GCGT  G,<M>  0  .  .  GT  0/1  1/2  2/2  2/2
+11  102  .  C     T,<M>  0  .  .  GT  0/2  2/0  0/1  0/0
+11  104  .  T     A,<M>  0  .  .  GT  0/2  2/1  1/1  1/0
+```
+While [vt][vt] aims to achieve a similar goal, it is unable to properly set the
+genotype fields as it [cannot][vtissue] perform decomposition and "unarization"
+at the same time.
 
 ### Theoretical advnatages of BGT
 
@@ -28,7 +72,12 @@ larger than a few hundred, the time complexity approaches *O*(*nk*),
 independent of *m*. This is a significant improvement over the *O*(*nm*) time
 complexity if we use BCF. Although BGT comes with a larger constant - probably
 due to more cache misses - and is thus slower on extracting all samples, it
-enables easier parallelization.
+can be parallelized by extracting a subset of samples and combining samples
+later, which can't be achieved with BCF.
+
+In addition to genotype extraction, BGT may in theory support advanced PBWT
+operations such as imputation and phasing. Implementing these functionalities
+is not on the plan for the time being.
 
 ### Performance on 1000g VCF
 
@@ -81,3 +130,6 @@ The following shows the time on a few operations (there are 565k alleles on chr1
 3m15s    bgt view -bl0 -s random-1000.txt -r 11 exac3.bgt > /dev/null
 1m42s    htsbox vcfview -bl0 -s random-10000.txt exac3.bcf 11 > /dev/null
 ```
+
+[vt]: https://github.com/atks/vt
+[vtissue]: https://github.com/atks/vt/issues/26
