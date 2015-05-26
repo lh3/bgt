@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#define BGT_VERSION "r116"
+#define BGT_VERSION "r117"
 
 int main_ucf2bgt(int argc, char *argv[]);
 int main_view(int argc, char *argv[]);
@@ -14,7 +14,7 @@ static int usage()
 	fprintf(stderr, "Commands:\n");
 	fprintf(stderr, "  import       convert unary VCF to BGT\n");
 //	fprintf(stderr, "  sview        single-BGT view (obsolete)\n"); // now this is for debugging only. use mview instead
-	fprintf(stderr, "  view         extract from multiple BGT\n");
+	fprintf(stderr, "  view         extract from BGT\n");
 	fprintf(stderr, "  version      show version number\n");
 	return 1;
 }

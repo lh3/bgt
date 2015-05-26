@@ -111,6 +111,7 @@ int main_view(int argc, char *argv[])
 		} else if (c == 'g' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 	}
 	if (clevel > 9) clevel = 9;
+	if (n_groups > 0) multi_flag |= BGT_F_SET_AC;
 	if (argc - optind < 1) {
 		fprintf(stderr, "Usage: bgt %s [options] <bgt-prefix>", argv[0]);
 		if (is_multi) fprintf(stderr, " [...]");
@@ -126,7 +127,14 @@ int main_view(int argc, char *argv[])
 			fprintf(stderr, "  -G           don't output sample genotype\n");
 			fprintf(stderr, "  -f STR       frequency filters [null]\n");
 			fprintf(stderr, "  -s EXPR      list of samples (see Notes below) [all]\n");
-			fprintf(stderr, "  -g EXPR      define a sample group (see Notes below) [null]\n");
+			fprintf(stderr, "  -g EXPR      define a sample group (force -a; write AC1/AN1 etc) [null]\n");
+			fprintf(stderr, "Notes:\n");
+			fprintf(stderr, "  For option -s or -g, EXPR can be one of:\n");
+			fprintf(stderr, "    1) comma-delimited sample list following a colon. e.g. -s:NA12878,NA12044\n");
+			fprintf(stderr, "    2) space-delimited file with the first column giving a sample name. e.g. -s samples.txt\n");
+			fprintf(stderr, "    3) expression if .spl file contains metadata. e.g.: -s\"gender=='M'&&population!='CEU'\"\n");
+			fprintf(stderr, "  Option -g defines a sample group. The first group is group 1, the second group 2, etc.\n");
+			fprintf(stderr, "  Samples not included in any group is group 0. BGT writes AC#/AN# tags for per-group AC/AN.\n");
 		}
 		return 1;
 	}
