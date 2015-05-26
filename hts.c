@@ -108,7 +108,10 @@ char **hts_readlines(const char *fn, int *_n)
 		str.s = 0; str.l = str.m = 0;
 		ks = ks_init(fp);
 		while (ks_getuntil(ks, KS_SEP_LINE, &str, &dret) >= 0) {
+			int i;
 			if (str.l == 0) continue;
+			for (i = 0; i < str.l && !isspace(str.s[i]); ++i);
+			str.s[i] = 0;
 			if (m == n) {
 				m = m? m<<1 : 16;
 				s = (char**)realloc(s, m * sizeof(void*));
