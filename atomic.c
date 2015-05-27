@@ -129,8 +129,8 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 			for (p = p_cigar; p < p_cigar + l_cigar && *p != ','; ++p);
 			assert(p - p_cigar > 0); // otherwise, incomplete CIGAR
 			kputsn(p_cigar, p - p_cigar, &cigar);
-			l_cigar -= p - p_cigar;
-			p_cigar = p;
+			l_cigar -= p + 1 - p_cigar;
+			p_cigar = p + 1;
 		} else if (strlen(b->d.allele[i]) == b->rlen) {
 			kputw(b->rlen, &cigar);
 			kputc('M', &cigar);
