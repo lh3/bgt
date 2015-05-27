@@ -110,7 +110,7 @@ char **hts_readlines(const char *fn, int *_n)
 		while (ks_getuntil(ks, KS_SEP_LINE, &str, &dret) >= 0) {
 			int i;
 			if (str.l == 0) continue;
-			for (i = 0; i < str.l && !isspace(str.s[i]); ++i);
+			for (i = 0; i < str.l && str.s[i] != '\t'; ++i);
 			str.s[i] = 0;
 			if (m == n) {
 				m = m? m<<1 : 16;
