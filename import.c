@@ -10,13 +10,13 @@ int main_ucf2bgt(int argc, char *argv[])
 	int i, c, clevel = -1, flag = 0, id_GT = -1;
 	char *fn_ref = 0, moder[8], modew[8];
 	char *prefix, *fn;
-	uint8_t *bits[2];
+	uint8_t *bits[2], *bit1;
 	int64_t n = 0;
 	htsFile *in, *out;
 	bcf_hdr_t *h0;
 	bcf1_t *b;
 	FILE *fp;
-	pbf_t *pb;
+	pbf_t *pb, *pb1;
 	bcf_atombuf_t *ab;
 	const bcf_atom_t *a;
 
@@ -68,6 +68,11 @@ int main_ucf2bgt(int argc, char *argv[])
 	bits[0] = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
 	bits[1] = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
 
+	// prepare PBF to write
+	sprintf(fn, "%s.pb1", prefix);
+	pb1 = pbf_open_w(fn, ab->h->n[BCF_DT_SAMPLE]*2, 1, 13);
+	bit1 = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
+
 	strcpy(modew, "wb");
 	if (clevel >= 0 && clevel <= 9) sprintf(modew + 2, "%d", clevel);
 	sprintf(fn, "%s.bcf", prefix);
@@ -79,9 +84,12 @@ int main_ucf2bgt(int argc, char *argv[])
 		int32_t i, val = n;
 		bcf_atom2bcf(a, b, 1, -1);
 		bcf_append_info_ints(h0, b, "_row", 1, &val);
-		for (i = 0; i < a->n_gt; ++i)
+		for (i = 0; i < a->n_gt; ++i) {
 			bits[0][i] = a->gt[i]&1, bits[1][i] = a->gt[i]>>1&1;
+			bit1[i] = (a->gt[i] == 1);
+		}
 		pbf_write(pb, bits);
+		pbf_write(pb1, &bit1);
 		bcf_subset(h0, b, 0, 0);
 		vcf_write1(out, h0, b);
 		++n;
@@ -90,8 +98,8 @@ int main_ucf2bgt(int argc, char *argv[])
 	bcf_destroy1(b);
 	hts_close(out);
 
-	pbf_close(pb);
-	free(bits[0]); free(bits[1]);
+	pbf_close(pb1); free(bit1);
+	pbf_close(pb);  free(bits[0]); free(bits[1]);
 
 	bcf_hdr_destroy(h0);
 	bcf_atombuf_destroy(ab);
