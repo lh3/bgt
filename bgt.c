@@ -171,62 +171,31 @@ int bgt_read_core(bgt_t *bgt)
 	} else return bgt_read_core0(bgt);
 }
 
+int bgt_read_rec(bgt_t *bgt, bgt_rec_t *r)
+{
+	int row;
+	const uint8_t **a;
+	r->b0 = 0, r->a[0] = r->a[1] = 0;
+	if (bgt->n_out == 0) return -1;
+	if ((row = bgt_read_core(bgt)) < 0) return row;
+	r->b0 = bgt->b0;
+	pbf_seek(bgt->pb, row);
+	a = pbf_read(bgt->pb);
+	r->a[0] = (uint8_t*)a[0], r->a[1] = (uint8_t*)a[1];
+	return row;
+}
+
 int bgt_read(bgt_t *bgt, bcf1_t *b)
 {
 	int ret;
-	const uint8_t **a;
-	ret = bgt_read_core(bgt);
-	if (ret < 0) return ret;
-	pbf_seek(bgt->pb, ret);
-	a = pbf_read(bgt->pb);
-	bcfcpy(b, bgt->b0);
-	bgt_gen_gt(bgt->h_out, b, bgt->n_out, a);
+	bgt_rec_t r;
+	if ((ret = bgt_read_rec(bgt, &r)) < 0) return ret;
+	bcfcpy(b, r.b0);
+	bgt_gen_gt(bgt->h_out, b, bgt->n_out, r.a);
 	return ret;
 }
 
 void bgt_set_bed(bgt_t *bgt, const void *bed, int excl) { bgt->bed = bed, bgt->bed_excl = excl; }
-
-/*************************************
- * reading records with the same pos *
- *************************************/
-
-static void append_to_pos(bgt_pos_t *p, const bcf1_t *b0, int m, const uint8_t **a)
-{
-	bgt_rec_t *r;
-	if (p->n_b == p->m_b) {
-		int oldm = p->m_b;
-		p->m_b = p->m_b? p->m_b<<1 : 4;
-		p->b = (bgt_rec_t*)realloc(p->b, p->m_b * sizeof(bgt_rec_t));
-		memset(&p->b[oldm], 0, (p->m_b - oldm) * sizeof(bgt_rec_t));
-	}
-	r = &p->b[p->n_b++];
-	if (r->b0 == 0) r->b0 = bcf_init1();
-	bcfcpy(r->b0, b0);
-	r->a[0] = (uint8_t*)realloc(r->a[0], m);
-	r->a[1] = (uint8_t*)realloc(r->a[1], m);
-	memcpy(r->a[0], a[0], m);
-	memcpy(r->a[1], a[1], m);
-}
-
-int bgt_read_pos(bgt_t *bgt, bgt_pos_t *p)
-{
-	p->n_b = 0;
-	if (p->finished || bgt->n_out == 0) return -1; // end-of-file or nothing to read
-	if (bgt->b0->shared.l == 0 && (p->row = bgt_read_core(bgt)) < 0) {
-		p->finished = 1;
-		return p->row;
-	}
-	p->rid = bgt->b0->rid, p->pos = bgt->b0->pos;
-	do {
-		const uint8_t **a;
-		pbf_seek(bgt->pb, p->row);
-		a = pbf_read(bgt->pb);
-		append_to_pos(p, bgt->b0, bgt->n_out<<1, a);
-		p->row = bgt_read_core(bgt); // read the next b0
-	} while (p->row >= 0 && bgt->b0->rid == p->rid && bgt->b0->pos == p->pos);
-	if (p->row < 0) p->finished = 1;
-	return p->n_b;
-}
 
 /*********************
  * Multi BGT reading *
@@ -252,30 +221,20 @@ bgtm_t *bgtm_open(int n_files, char *const*fns)
 	}
 	bgtm_set_samples(bm, n_samples, samples);
 	free(samples);
-	bm->p = (bgt_pos_t*)calloc(bm->n_bgt, sizeof(bgt_pos_t));
+	bm->r = (bgt_rec_t*)calloc(bm->n_bgt, sizeof(bgt_rec_t));
 	return bm;
 }
 
 void bgtm_close(bgtm_t *bm)
 {
-	int i, j;
+	int i;
 	free(bm->group);
 	free(bm->sample_idx);
 	bcf_hdr_destroy(bm->h_out);
 	free(bm->a[0]); free(bm->a[1]);
-	for (i = 0; i < bm->n_bgt; ++i) {
-		bgt_pos_t *p = &bm->p[i];
-		for (j = 0; j < p->m_b; ++j) {
-			if (p->b[j].b0 == 0) continue;
-			bcf_destroy1(p->b[j].b0);
-			free(p->b[j].a[0]); free(p->b[j].a[1]);
-		}
-		free(p->b);
+	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_close(bm->bgt[i]);
-	}
-	free(bm->p);
-	free(bm->bgt);
-	free(bm);
+	free(bm->r); free(bm->bgt); free(bm);
 }
 
 void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
@@ -315,11 +274,9 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	kputs("##fileformat=VCFv4.1\n", &h);
 	kputs("##INFO=<ID=AC,Number=A,Type=String,Description=\"Count of alternate alleles\">\n", &h);
 	kputs("##INFO=<ID=AN,Number=A,Type=String,Description=\"Count of total alleles\">\n", &h);
-	kputs("##INFO=<ID=AC0,Number=A,Type=String,Description=\"Count of alternate alleles not in any sample groups\">\n", &h);
-	kputs("##INFO=<ID=AN0,Number=A,Type=String,Description=\"Count of total alleles not in any sample groups\">\n", &h);
 	for (i = 1; i <= BGT_MAX_GROUPS; ++i) {
-		ksprintf(&h, "##INFO=<ID=AC%d,Number=A,Type=String,Description=\"Count of alternate alleles for sample group %d\">\n", i+1, i+1);
-		ksprintf(&h, "##INFO=<ID=AN%d,Number=A,Type=String,Description=\"Count of total alleles for sample group %d\">\n", i+1, i+1);
+		ksprintf(&h, "##INFO=<ID=AC%d,Number=A,Type=String,Description=\"Count of alternate alleles for sample group %d\">\n", i, i);
+		ksprintf(&h, "##INFO=<ID=AN%d,Number=A,Type=String,Description=\"Count of total alleles for sample group %d\">\n", i, i);
 	}
 	kputs("##INFO=<ID=END,Number=1,Type=Integer,Description=\"Ending position\">\n", &h);
 	kputs("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n", &h);
@@ -381,27 +338,24 @@ int bgtm_set_region(bgtm_t *bm, const char *reg)
 int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 {
 	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref;
-	bcf1_t *b0 = 0;
+	const bcf1_t *b0 = 0;
 
 	// fill the buffer
 	for (i = n_rest = 0; i < bm->n_bgt; ++i) {
-		if (bm->p[i].n_b == 0)
-			bgt_read_pos(bm->bgt[i], &bm->p[i]);
-		n_rest += bm->p[i].n_b;
+		if (bm->r[i].b0 == 0)
+			bgt_read_rec(bm->bgt[i], &bm->r[i]);
+		n_rest += (bm->r[i].b0 != 0);
 	}
 	if (n_rest == 0) return -1;
 	// search for the smallest allele
 	for (i = 0; i < bm->n_bgt; ++i) {
-		bgt_pos_t *p = &bm->p[i];
-		for (j = 0; j < p->n_b; ++j) {
-			if (b0) {
-				int c;
-				c = bcfcmp(b0, p->b[j].b0);
-				if (c > 0) b0 = p->b[j].b0, max_allele = b0->n_allele;
-				else if (c == 0)
-					max_allele = p->b[j].b0->n_allele > max_allele? p->b[j].b0->n_allele : max_allele;
-			} else b0 = p->b[j].b0, max_allele = b0->n_allele;
-		}
+		bgt_rec_t *r = &bm->r[i];
+		if (b0) {
+			j = bcfcmp(b0, r->b0);
+			if (j > 0) b0 = r->b0, max_allele = b0->n_allele;
+			else if (j == 0)
+				max_allele = r->b0->n_allele > max_allele? r->b0->n_allele : max_allele;
+		} else b0 = r->b0, max_allele = b0->n_allele;
 	}
 	assert(b0 && max_allele >= 2);
 	l_ref = bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
@@ -411,24 +365,13 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 	}
 	// generate bm->a
 	for (i = 0; i < bm->n_bgt; ++i) {
-		bgt_pos_t *p = &bm->p[i];
+		bgt_rec_t *r = &bm->r[i];
 		bgt_t *bgt = bm->bgt[i];
-		bgt_rec_t q, swap;
-		int n_min = 0, end = p->n_b - 1;
 		if (bgt->n_out == 0) continue;
-		memset(&q, 0, sizeof(bgt_rec_t)); // suppress a gcc warning
-		for (j = 0; j <= end; ++j) {
-			if (bcfcmp(b, p->b[j].b0) == 0) { // then swap to the end
-				q = p->b[j];
-				++n_min;
-				if (j != end) swap = p->b[end], p->b[end] = p->b[j], p->b[j] = swap;
-				--end, --j;
-			}
-		}
-		p->n_b = end + 1;
-		if (n_min) { // copy; when there are multiple, we only copy the last one
-			memcpy(bm->a[0] + off, q.a[0], bgt->n_out<<1);
-			memcpy(bm->a[1] + off, q.a[1], bgt->n_out<<1);
+		if (bcfcmp(b, r->b0) == 0) { // copy
+			r->b0 = 0;
+			memcpy(bm->a[0] + off, r->a[0], bgt->n_out<<1);
+			memcpy(bm->a[1] + off, r->a[1], bgt->n_out<<1);
 		} else { // add missing values
 			memset(bm->a[0] + off, 0, bgt->n_out<<1);
 			memset(bm->a[1] + off, 1, bgt->n_out<<1);
