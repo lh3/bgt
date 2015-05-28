@@ -26,16 +26,10 @@ typedef struct {
 	bcf_hdr_t *h_out;
 } bgt_t;
 
-typedef struct {
-	bcf1_t *b0;
-	uint8_t *a[2];
+typedef struct { // during reading, these are all links
+	const bcf1_t *b0;
+	const uint8_t *a[2];
 } bgt_rec_t;
-
-typedef struct {
-	int rid, pos;
-	int m_b, n_b, row, finished;
-	bgt_rec_t *b;
-} bgt_pos_t;
 
 typedef int (*bgt_filter_f)(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n_groups, int32_t *gan, int32_t *gac1, void *data);
 
@@ -44,7 +38,7 @@ typedef struct {
 	int *sample_idx;
 	uint8_t *group;
 	bgt_t **bgt;
-	bgt_pos_t *p;
+	bgt_rec_t *r;
 	bcf_hdr_t *h_out;
 	bgt_filter_f filter_func;
 	void *filter_data;
