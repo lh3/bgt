@@ -350,6 +350,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 	// search for the smallest allele
 	for (i = 0; i < bm->n_bgt; ++i) {
 		bgt_rec_t *r = &bm->r[i];
+		if (r->b0 == 0) continue;
 		if (b0) {
 			j = bcfcmp(b0, r->b0);
 			if (j > 0) b0 = r->b0, max_allele = b0->n_allele;
@@ -368,7 +369,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		bgt_rec_t *r = &bm->r[i];
 		bgt_t *bgt = bm->bgt[i];
 		if (bgt->n_out == 0) continue;
-		if (bcfcmp(b, r->b0) == 0) { // copy
+		if (r->b0 && bcfcmp(b, r->b0) == 0) { // copy
 			r->b0 = 0;
 			memcpy(bm->a[0] + off, r->a[0], bgt->n_out<<1);
 			memcpy(bm->a[1] + off, r->a[1], bgt->n_out<<1);

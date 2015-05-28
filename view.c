@@ -167,12 +167,12 @@ int main_view(int argc, char *argv[])
 					samples[k++] = g[i][j];
 			bgtm_set_samples(bm, n_samples, samples);
 			free(samples);
-			if (n_groups > 1) {
-				for (i = 0; i < n_groups; ++i) {
+			if (n_groups > 1)
+				for (i = 0; i < n_groups; ++i)
 					bgtm_add_group(bm, ng[i], g[i]);
-					for (j = 0; j < ng[i]; ++j) free(g[i][j]);
-					free(g[i]);
-				}
+			for (i = 0; i < n_groups; ++i) {
+				for (j = 0; j < ng[i]; ++j) free(g[i][j]);
+				free(g[i]);
 			}
 		}
 	}
