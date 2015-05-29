@@ -222,19 +222,14 @@ int main_getalt(int argc, char *argv[])
 	b = bcf_init1();
 	while (bcf_read1(fp, b) >= 0) {
 		char *ref, *alt;
-		int l_ref, l_alt, i, min_l;
+		int l_ref, l_alt;
 		bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
-		min_l = l_ref < l_alt? l_ref : l_alt;
-		for (i = 0; i < min_l && ref[i] == alt[i]; ++i);
 		s.l = 0;
 		kputs(h->id[BCF_DT_CTG][b->rid].key, &s);
-		kputc(':', &s); kputw(b->pos + 1 + i, &s);
-		kputc(':', &s); kputw(b->rlen - i, &s);
-		kputc(':', &s); kputsn(alt + i, l_alt - i, &s);
-		kputc('\t', &s); kputsn("CHROM:Z:", 8, &s); kputs(h->id[BCF_DT_CTG][b->rid].key, &s);
-		kputc('\t', &s); kputsn("POS:i:", 6, &s); kputw(b->pos + 1, &s);
+		kputc(':', &s); kputw(b->pos + 1, &s);
+		kputc(':', &s); kputw(b->rlen, &s);
+		kputc(':', &s); kputsn(alt, l_alt, &s);
 		kputc('\t', &s); kputsn("REF:Z:", 6, &s); kputsn(ref, l_ref, &s);
-		kputc('\t', &s); kputsn("ALT:Z:", 6, &s); kputsn(alt, l_alt, &s);
 		puts(s.s);
 	}
 	bcf_destroy1(b);
