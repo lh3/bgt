@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <limits.h>
 #include <stdio.h>
 #include "bgt.h"
 #include "kexpr.h"
@@ -11,6 +12,7 @@ KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
 
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
+char **hts_readlines(const char *fn, int *_n);
 
 typedef struct {
 	kexpr_t *ke;
@@ -103,13 +105,13 @@ int main_view(int argc, char *argv[])
 	memset(&flt, 0, sizeof(flt_aux_t));
 	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "sview") == 0 || strcmp(argv[0], "mview") == 0);
 	is_multi = strcmp(argv[0], "sview")? 1 : 0;
-	while ((c = getopt(argc, argv, "bs:r:l:aGB:ef:g:")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
 		else if (c == 'e') excl = 1;
 		else if (c == 'B') bed = bed_read(optarg);
-		else if (is_multi && c == 'a') multi_flag |= BGT_F_SET_AC;
+		else if (is_multi && c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (is_multi && c == 'G') multi_flag |= BGT_F_NO_GT;
 		else if (is_multi && c == 'f') {
 			int err = 0;
@@ -130,10 +132,18 @@ int main_view(int argc, char *argv[])
 				fprintf(stderr, "[E::%s] failed to parse allele '%s'\n", __func__, optarg);
 				return 1; // FIXME: memory leak
 			}
+			if (n_a > 1 && strcmp(p->chr.s, a[0].chr.s) != 0) {
+				fprintf(stderr, "[E::%s] for now, -a doesn't support alleles on different CHROM. Abort!\n", __func__);
+				return 1; // FIXME: memory leak
+			}
 		}
 	}
 	if (clevel > 9) clevel = 9;
 	if (n_groups > 1) multi_flag |= BGT_F_SET_AC;
+	if (reg && n_a > 0) {
+		fprintf(stderr, "[W::%s] -r and -a can't be specified at the same time. -r is igored.\n", __func__);
+		reg = 0;
+	}
 	if (argc - optind < 1) {
 		fprintf(stderr, "Usage: bgt %s [options] <bgt-prefix>", argv[0]);
 		if (is_multi) fprintf(stderr, " [...]");
@@ -158,6 +168,17 @@ int main_view(int argc, char *argv[])
 			fprintf(stderr, "  the second to AC2/AN2, etc.\n");
 		}
 		return 1;
+	}
+
+	// set reg
+	if (n_a > 0) {
+		int min = INT_MAX, max = INT_MIN;
+		for (i = 0; i < n_a; ++i) {
+			min = min < a[i].pos? min : a[i].pos;
+			max = max > a[i].pos? max : a[i].pos;
+		}
+		reg = (char*)malloc(strlen(a[0].chr.s) + 24);
+		sprintf(reg, "%s:%d-%d", a[0].chr.s, min+1, max+1);
 	}
 
 	if (!is_multi) {
@@ -210,6 +231,7 @@ int main_view(int argc, char *argv[])
 	if (bm) bgtm_close(bm);
 	if (bed) bed_destroy(bed);
 	if (flt.ke) ke_destroy(flt.ke);
+	if (n_a) free(reg);
 	for (i = 0; i < n_a; ++i) free(a[i].chr.s);
 	free(a);
 	return 0;
