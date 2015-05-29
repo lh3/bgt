@@ -12,21 +12,6 @@ static inline int bcf_atom_cmp2(const bcf_atom_t *a, const bcf_atom_t *b)
 #define atom_lt(a, b) (bcf_atom_cmp2(&(a), &(b)) < 0)
 KSORT_INIT(atom, bcf_atom_t, atom_lt)
 
-void bcf_atomize_first(const bcf1_t *b, bcf_atom_t *a)
-{
-	int l_ref, l_alt;
-	char *ref, *alt;
-	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
-	a->rlen = b->rlen, a->rid = b->rid, a->pos = b->pos;
-	a->ref.l = 0;
-	kputsn(ref, l_ref, &a->ref); kputc(0, &a->ref);
-	kputsn(alt, l_alt, &a->ref);
-	a->alt = a->ref.s + l_ref + 1;
-	a->anum = 1;
-	a->has_multi = (b->n_allele > 2);
-	a->n_gt = a->from_new = 0;
-}
-
 static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 {
 	int i, j, k, *eq, id_GT, *tr, has_dup = 0;
