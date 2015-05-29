@@ -45,6 +45,12 @@ typedef struct {
 	uint8_t *a[2];
 } bgtm_t;
 
+typedef struct {
+	kstring_t chr;
+	char *alt;
+	int pos, rlen;
+} bgt_allele_t;
+
 bgt_t *bgt_open(const char *prefix);
 void bgt_close(bgt_t *bgt);
 void bgt_set_samples(bgt_t *bgt, int n, char *const* samples);
@@ -61,5 +67,8 @@ void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 void bgtm_add_group(bgtm_t *bm, int n, char *const* samples);
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
+
+int bgt_al_parse(const char *al, bgt_allele_t *a);
+int bgt_al_test(const bcf_hdr_t *h, const bcf1_t *b, const bgt_allele_t *a);
 
 #endif

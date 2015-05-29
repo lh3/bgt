@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <ctype.h>
 #include "bgt.h"
 #include "kstring.h"
 
@@ -447,3 +448,48 @@ void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl)
 
 void bgtm_set_flag(bgtm_t *bm, int flag) { bm->flag = flag; }
 void bgtm_set_filter(bgtm_t *bm, bgt_filter_f func, void *data) { bm->filter_func = func; bm->filter_data = data; }
+
+/******************
+ * Allele parsing *
+ ******************/
+
+int bgt_al_parse(const char *al, bgt_allele_t *a)
+{
+	char *p = (char*)al, *ref = 0, *alt = 0;
+	int sep = ':', off, tmp;
+	a->chr.l = 0; a->alt = 0; a->pos = -1; a->rlen = -1;
+	for (; *p && *p != sep; ++p);
+	if (*p == 0) return -1;
+	kputsn(al, p - al, &a->chr); kputc(0, &a->chr);
+	++p; // skip the delimiter
+	if (!isdigit(*p)) return -1;
+	a->pos = strtol(p, &p, 10) - 1; // read position
+	if (*p != sep) return -1;
+	++p; // skip the delimiter
+	if (isdigit(*p)) {
+		a->rlen = strtol(p, &p, 10);
+	} else if (isalpha(*p)) {
+		ref = p;
+		for (; isalpha(*p); ++p);
+		a->rlen = p - ref;
+	} else return -1;
+	if (*p != sep) return -1;
+	alt = ++p;
+	for (off = 0; *p && isalpha(*p); ++p)
+		if (ref && toupper(*p) == toupper(ref[off])) ++off;
+		else break;
+	a->pos += off; a->rlen -= off;
+	tmp = a->chr.l;
+	kputs(alt + off, &a->chr);
+	a->alt = a->chr.s + tmp;
+	if (ref) {
+		int l_alt = a->chr.s + a->chr.l - a->alt;
+		int min_l = l_alt < a->rlen? l_alt : a->rlen;
+		ref += off;
+		for (off = 0; off < min_l && isalpha(ref[a->rlen - 1 - off]) && toupper(ref[a->rlen - 1 - off]) == toupper(a->alt[l_alt - 1 - off]); ++off);
+		a->rlen -= off;
+		a->alt[l_alt - off] = 0;
+		a->chr.l -= off;
+	}
+	return 0;
+}

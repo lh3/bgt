@@ -240,3 +240,30 @@ int main_getalt(int argc, char *argv[])
 	free(s.s);
 	return 0;
 }
+
+int main_getind(int argc, char *argv[])
+{
+	int c, i, n_a = 0, m_a = 0;
+	bgt_allele_t *a = 0;
+
+	while ((c = getopt(argc, argv, "a:")) >= 0) {
+		if (c == 'a') {
+			bgt_allele_t *p;
+			if (n_a == m_a) {
+				int old = m_a;
+				m_a = m_a? m_a<<1 : 2;
+				a = (bgt_allele_t*)realloc(a, m_a * sizeof(bgt_allele_t));
+				memset(a + old, 0, (m_a - old) * sizeof(bgt_allele_t));
+			}
+			p = &a[n_a++];
+			if (bgt_al_parse(optarg, p) < 0) {
+				fprintf(stderr, "[E::%s] failed to parse allele '%s'\n", __func__, optarg);
+				return 1; // FIXME: memory leak
+			}
+		}
+	}
+
+	for (i = 0; i < n_a; ++i) free(a[i].chr.s);
+	free(a);
+	return 0;
+}
