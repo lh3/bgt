@@ -243,6 +243,7 @@ extern "C" {
 	int bcf_is_snp(bcf1_t *v);
 	int bcf_is_filtered(bcf1_t *b);
 
+	void bcf_get_ref_alt1(const bcf1_t *b, int *l_ref, char **ref, int *l_alt, char **alt);
 	char *bcf_get_alt1(const bcf1_t *b, int *len);
 	void bcfcpy(bcf1_t *dst, const bcf1_t *src);
 	int bcfcmp(const bcf1_t *a, const bcf1_t *b);

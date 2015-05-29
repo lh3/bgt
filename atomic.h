@@ -25,6 +25,7 @@ typedef struct {
 	bcf_hdr_t *h;
 } bcf_atombuf_t;
 
+void bcf_atomize_first(const bcf1_t *b, bcf_atom_t *a);
 void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a);
 bcf_atombuf_t *bcf_atombuf_init(htsFile *in, int keep_flt);
 void bcf_atombuf_destroy(bcf_atombuf_t *buf);
