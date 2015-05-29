@@ -243,33 +243,18 @@ void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples)
 	int i, j, m;
 	kstring_t h = {0,0,0};
 	bcf_hdr_t *h0;
-	khash_t(s2i) *hash;
 
 	if (bm->n_bgt == 0) return;
-	hash = kh_init(s2i);
-	for (i = 0; i < n; ++i) {
-		khint_t k;
-		int absent;
-		k = kh_put(s2i, hash, samples[i], &absent);
-		if (absent) kh_val(hash, k) = i;
-	}
 	for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
 		bgt_set_samples(bm->bgt[i], n, samples);
 		bm->n_out += bm->bgt[i]->n_out;
 	}
 	bm->group = (uint8_t*)realloc(bm->group, bm->n_out);
 	memset(bm->group, 0, bm->n_out);
-	bm->sample_idx = (int*)realloc(bm->sample_idx, bm->n_out * sizeof(int));
-	for (i = m = 0; i < bm->n_bgt; ++i) {
-		bgt_t *bgt = bm->bgt[i];
-		for (j = 0; j < bgt->n_out; ++j) {
-			khint_t k;
-			k = kh_get(s2i, hash, bgt->samples[bgt->out[j]]);
-			assert(k != kh_end(hash));
-			bm->sample_idx[m++] = kh_val(hash, k);
-		}
-	}
-	kh_destroy(s2i, hash);
+	bm->sample_idx = (uint64_t*)realloc(bm->sample_idx, bm->n_out * 8);
+	for (i = m = 0; i < bm->n_bgt; ++i)
+		for (j = 0; j < bm->bgt[i]->n_out; ++j)
+			bm->sample_idx[m++] = (uint64_t)i<<32 | bm->bgt[i]->out[j];
 
 	h0 = bm->bgt[0]->h0; // FIXME: test if headers are consistent
 	kputs("##fileformat=VCFv4.1\n", &h);

@@ -35,7 +35,7 @@ typedef int (*bgt_filter_f)(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n_group
 
 typedef struct {
 	int n_bgt, n_out, n_groups, flag;
-	int *sample_idx;
+	uint64_t *sample_idx;
 	uint8_t *group;
 	bgt_t **bgt;
 	bgt_rec_t *r;

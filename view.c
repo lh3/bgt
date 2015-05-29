@@ -97,6 +97,8 @@ int main_view(int argc, char *argv[])
 	void *bed = 0;
 	int n_groups = 0;
 	char *gexpr[BGT_MAX_GROUPS];
+	int n_a = 0, m_a = 0;
+	bgt_allele_t *a = 0;
 
 	memset(&flt, 0, sizeof(flt_aux_t));
 	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "sview") == 0 || strcmp(argv[0], "mview") == 0);
@@ -113,7 +115,22 @@ int main_view(int argc, char *argv[])
 			int err = 0;
 			flt.ke = ke_parse(optarg, &err);
 			assert(err == 0 && flt.ke != 0);
-		} else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
+		} else if (c == 's' && n_groups < BGT_MAX_GROUPS) {
+			gexpr[n_groups++] = optarg;
+		} else if (c == 'a') {
+			bgt_allele_t *p;
+			if (n_a == m_a) {
+				int old = m_a;
+				m_a = m_a? m_a<<1 : 2;
+				a = (bgt_allele_t*)realloc(a, m_a * sizeof(bgt_allele_t));
+				memset(a + old, 0, (m_a - old) * sizeof(bgt_allele_t));
+			}
+			p = &a[n_a++];
+			if (bgt_al_parse(optarg, p) < 0) {
+				fprintf(stderr, "[E::%s] failed to parse allele '%s'\n", __func__, optarg);
+				return 1; // FIXME: memory leak
+			}
+		}
 	}
 	if (clevel > 9) clevel = 9;
 	if (n_groups > 1) multi_flag |= BGT_F_SET_AC;
@@ -193,6 +210,8 @@ int main_view(int argc, char *argv[])
 	if (bm) bgtm_close(bm);
 	if (bed) bed_destroy(bed);
 	if (flt.ke) ke_destroy(flt.ke);
+	for (i = 0; i < n_a; ++i) free(a[i].chr.s);
+	free(a);
 	return 0;
 }
 
@@ -238,32 +257,5 @@ int main_getalt(int argc, char *argv[])
 
 	bgzf_close(fp);
 	free(s.s);
-	return 0;
-}
-
-int main_getind(int argc, char *argv[])
-{
-	int c, i, n_a = 0, m_a = 0;
-	bgt_allele_t *a = 0;
-
-	while ((c = getopt(argc, argv, "a:")) >= 0) {
-		if (c == 'a') {
-			bgt_allele_t *p;
-			if (n_a == m_a) {
-				int old = m_a;
-				m_a = m_a? m_a<<1 : 2;
-				a = (bgt_allele_t*)realloc(a, m_a * sizeof(bgt_allele_t));
-				memset(a + old, 0, (m_a - old) * sizeof(bgt_allele_t));
-			}
-			p = &a[n_a++];
-			if (bgt_al_parse(optarg, p) < 0) {
-				fprintf(stderr, "[E::%s] failed to parse allele '%s'\n", __func__, optarg);
-				return 1; // FIXME: memory leak
-			}
-		}
-	}
-
-	for (i = 0; i < n_a; ++i) free(a[i].chr.s);
-	free(a);
 	return 0;
 }

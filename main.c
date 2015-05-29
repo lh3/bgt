@@ -8,7 +8,6 @@
 int main_ucf2bgt(int argc, char *argv[]);
 int main_view(int argc, char *argv[]);
 int main_getalt(int argc, char *argv[]);
-int main_getind(int argc, char *argv[]);
 
 static int usage()
 {
@@ -30,7 +29,6 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "view") == 0) return main_view(argc-1, argv+1);
 	else if (strcmp(argv[1], "mview") == 0) return main_view(argc-1, argv+1);
 	else if (strcmp(argv[1], "getalt") == 0) return main_getalt(argc-1, argv+1);
-	else if (strcmp(argv[1], "getind") == 0) return main_getind(argc-1, argv+1);
 	else if (strcmp(argv[1], "version") == 0) {
 		puts(BGT_VERSION);
 		return 0;
