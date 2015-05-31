@@ -8,10 +8,6 @@
 #include "khash.h"
 KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
 
-#include "ksort.h"
-#define generic_key(x) (x)
-KRADIX_SORT_INIT(i, int, generic_key, 4)
-
 void *bed_read(const char *fn);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 void bed_destroy(void *_h);
@@ -24,8 +20,6 @@ bgt_t *bgt_open(const char *prefix)
 {
 	char *fn;
 	bgt_t *bgt;
-	int i, absent;
-	khash_t(s2i) *h;
 
 	bgt = (bgt_t*)calloc(1, sizeof(bgt_t));
 	fn = (char*)malloc(strlen(prefix) + 9);
@@ -33,14 +27,6 @@ bgt_t *bgt_open(const char *prefix)
 	// read samples
 	sprintf(fn, "%s.spl", prefix);
 	bgt->samples = hts_readlines(fn, &bgt->n_samples);
-	h = kh_init(s2i);
-	for (i = 0; i < bgt->n_samples; ++i) {
-		khint_t k;
-		k = kh_put(s2i, h, bgt->samples[i], &absent);
-		assert(absent); // otherwise there are duplicated sample names
-		kh_val(h, k) = i;
-	}
-	bgt->h_samples = h;
 
 	// open PBF
 	sprintf(fn, "%s.pbf", prefix);
@@ -69,7 +55,6 @@ void bgt_close(bgt_t *bgt)
 	bcf_hdr_destroy(bgt->h0);
 	vcf_close(bgt->bcf);
 	pbf_close(bgt->pb);
-	kh_destroy(s2i, (kh_s2i_t*)bgt->h_samples);
 	for (i = 0; i < bgt->n_samples; ++i)
 		free(bgt->samples[i]);
 	free(bgt->samples);
@@ -78,35 +63,44 @@ void bgt_close(bgt_t *bgt)
 
 void bgt_set_samples(bgt_t *bgt, int n, char *const* samples)
 {
-	int i, last, *t;
-	const khash_t(s2i) *h = (khash_t(s2i)*)bgt->h_samples;
+	int i, *t, tmp;
+	khash_t(s2i) *h;
 	kstring_t str = {0,0,0};
 
-	bgt->out = (int*)realloc(bgt->out, n * sizeof(int));
+	// build hash table for samples
+	h = kh_init(s2i);
 	for (i = 0; i < n; ++i) {
 		khint_t k;
-		k = kh_get(s2i, h, samples[i]);
-		bgt->out[i] = k != kh_end(h)? kh_val(h, k) : bgt->n_samples;
+		int absent;
+		k = kh_put(s2i, h, samples[i], &absent);
 	}
-	radix_sort_i(bgt->out, bgt->out + n);
-	for (i = bgt->n_out = 1, last = bgt->out[0]; i < n; ++i) // remove unidentified or duplicated samples
-		if (bgt->out[i] != bgt->n_samples && bgt->out[i] != last)
-			bgt->out[bgt->n_out++] = bgt->out[i], last = bgt->out[i];
-	if (bgt->n_out == 0) return;
+	tmp = kh_size(h) < bgt->n_samples? kh_size(h) : bgt->n_samples;
 
+	// fill bgt->out
+	bgt->n_out = 0;
+	bgt->out = (int*)realloc(bgt->out, tmp * sizeof(int));
+	for (i = 0; i < bgt->n_samples; ++i)
+		if (kh_get(s2i, h, bgt->samples[i]) != kh_end(h))
+			bgt->out[bgt->n_out++] = i;
+	kh_destroy(s2i, h);
+
+	// build ->h_out VCF header
 	if (bgt->h_out) bcf_hdr_destroy(bgt->h_out);
 	bgt->h_out = bcf_hdr_init();
 	kputsn(bgt->h0->text, bgt->h0->l_text, &str);
 	if (str.s[str.l-1] == 0) --str.l;
-	kputs("\tFORMAT", &str);
-	for (i = 0; i < bgt->n_out; ++i) {
-		kputc('\t', &str);
-		kputs(bgt->samples[bgt->out[i]], &str);
+	if (bgt->n_out > 0) {
+		kputs("\tFORMAT", &str);
+		for (i = 0; i < bgt->n_out; ++i) {
+			kputc('\t', &str);
+			kputs(bgt->samples[bgt->out[i]], &str);
+		}
 	}
 	bgt->h_out->text = str.s;
 	bgt->h_out->l_text = str.l + 1; // including the last NULL
 	bcf_hdr_parse(bgt->h_out);
 
+	// subsetting pbf
 	t = (int*)malloc(bgt->n_out * 2 * sizeof(int));
 	for (i = 0; i < bgt->n_out; ++i)
 		t[i<<1|0] = bgt->out[i]<<1|0, t[i<<1|1] = bgt->out[i]<<1|1;

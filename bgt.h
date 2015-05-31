@@ -12,7 +12,6 @@
 typedef struct {
 	int n_samples;
 	char **samples;
-	void *h_samples; // hash table
 
 	pbf_t *pb;
 	htsFile *bcf;
