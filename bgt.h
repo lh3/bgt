@@ -61,19 +61,20 @@ void bgt_close(bgt_file_t *bgt);
 
 bgt_t *bgt_reader_init(const bgt_file_t *bf);
 void bgt_reader_destroy(bgt_t *bgt);
-int bgt_set_samples_core(bgt_t *bgt, int n, char *const* samples, const char *expr);
 void bgt_set_bed(bgt_t *bgt, const void *bed, int excl);
 int bgt_set_region(bgt_t *bgt, const char *reg);
+
 int bgt_read(bgt_t *bgt, bcf1_t *b);
 
 bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const*fns);
 void bgtm_reader_destroy(bgtm_t *bm);
 void bgtm_set_flag(bgtm_t *bm, int flag);
-void bgtm_set_samples(bgtm_t *bm, int n, char *const* samples);
 void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 void bgtm_add_group(bgtm_t *bm, const char *expr);
+void bgtm_prepare(bgtm_t *bm);
+
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
 int bgt_al_parse(const char *al, bgt_allele_t *a);

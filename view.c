@@ -126,6 +126,7 @@ int main_view(int argc, char *argv[])
 	}
 
 	n_files = argc - optind;
+	files = (bgt_file_t**)calloc(n_files, sizeof(bgt_file_t*));
 	for (i = 0; i < n_files; ++i) files[i] = bgt_open(argv[optind+i]);
 
 	bm = bgtm_reader_init(n_files, files);
@@ -140,6 +141,7 @@ int main_view(int argc, char *argv[])
 	if (out_bcf) strcat(modew, "b");
 	sprintf(modew + strlen(modew), "%d", clevel);
 	out = hts_open("-", modew, 0);
+	bgtm_prepare(bm);
 	vcf_hdr_write(out, bm->h_out);
 
 	b = bcf_init1();
@@ -154,6 +156,8 @@ int main_view(int argc, char *argv[])
 	if (n_a) free(reg);
 	for (i = 0; i < n_a; ++i) free(a[i].chr.s);
 	free(a);
+	for (i = 0; i < n_files; ++i) bgt_close(files[i]);
+	free(files);
 	return 0;
 }
 

@@ -52,6 +52,7 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 {
 	char *fn;
 	bgt_t *bgt;
+	bcf_hdr_t *h;
 	bgt = (bgt_t*)calloc(1, sizeof(bgt_t));
 	bgt->f = bf;
 	fn = (char*)malloc(strlen(bf->prefix) + 9);
@@ -59,7 +60,9 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 	bgt->pb = pbf_open_r(fn);
 	sprintf(fn, "%s.bcf", bf->prefix);
 	bgt->bcf = bgzf_open(fn, "rb");
-	bcf_seekn(bgt->bcf, bgt->f->idx, 0);
+	h = bcf_hdr_read(bgt->bcf);
+	bcf_hdr_destroy(h);
+//	bcf_seekn(bgt->bcf, bgt->f->idx, 0);
 	bgt->b0 = bcf_init1();
 	bgt->flag = (uint8_t*)calloc(bgt->f->f->n_rows, 1);
 	free(fn);
@@ -91,20 +94,19 @@ void bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *exp
 		khint_t k;
 		kexpr_t *ke = 0;
 
-		ke = ke_parse(expr, &err);
-		if (err && ke) {
-			ke_destroy(ke);
-			ke = 0;
+		if (expr) {
+			ke = ke_parse(expr, &err);
+			if (err && ke) {
+				ke_destroy(ke);
+				ke = 0;
+			}
 		}
 		h = kh_init(s2i);
 		for (i = 0; i < n; ++i)
 			k = kh_put(s2i, h, samples[i], &absent);
-		for (i = 0; i < f->n_rows; ++i) {
-			if (kh_get(s2i, h, f->rows[i].name) != kh_end(h)) {
-				if (ke == 0 || fmf_test(f, i, ke))
-					bgt->flag[i] |= 1<<bgt->n_groups;
-			}
-		}
+		for (i = 0; i < f->n_rows; ++i)
+			if ((kh_get(s2i, h, f->rows[i].name) != kh_end(h)) || (ke && fmf_test(f, i, ke)))
+				bgt->flag[i] |= 1<<bgt->n_groups;
 		kh_destroy(s2i, h);
 		ke_destroy(ke);
 	}
@@ -113,7 +115,7 @@ void bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *exp
 
 void bgt_add_group(bgt_t *bgt, const char *expr)
 {
-	int is_file;
+	int is_file = 0;
 	FILE *fp;
 	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
 		is_file = 1;
@@ -464,6 +466,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 int bgtm_read(bgtm_t *bm, bcf1_t *b)
 {
 	int ret;
+	if (bm->h_out == 0) bgtm_prepare(bm);
 	while ((ret = bgtm_read_core(bm, b)) > 0);
 	return ret;
 }
