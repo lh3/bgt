@@ -5,7 +5,7 @@
 #include "atomic.h"
 #include "pbwt.h"
 
-int main_ucf2bgt(int argc, char *argv[])
+int main_import(int argc, char *argv[])
 {
 	int i, c, clevel = -1, flag = 0, id_GT = -1;
 	char *fn_ref = 0, moder[8], modew[8];

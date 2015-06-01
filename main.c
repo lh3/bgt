@@ -5,7 +5,7 @@
 
 #define BGT_VERSION "r137"
 
-int main_ucf2bgt(int argc, char *argv[]);
+int main_import(int argc, char *argv[]);
 int main_view(int argc, char *argv[]);
 int main_getalt(int argc, char *argv[]);
 
@@ -23,9 +23,7 @@ static int usage()
 int main(int argc, char *argv[])
 {
 	if (argc < 2) return usage();
-	if (strcmp(argv[1], "ucf2bgt") == 0) return main_ucf2bgt(argc-1, argv+1);
-	else if (strcmp(argv[1], "import") == 0) return main_ucf2bgt(argc-1, argv+1);
-	else if (strcmp(argv[1], "sview") == 0) return main_view(argc-1, argv+1);
+	if (strcmp(argv[1], "import") == 0) return main_import(argc-1, argv+1);
 	else if (strcmp(argv[1], "view") == 0) return main_view(argc-1, argv+1);
 	else if (strcmp(argv[1], "mview") == 0) return main_view(argc-1, argv+1);
 	else if (strcmp(argv[1], "getalt") == 0) return main_getalt(argc-1, argv+1);
