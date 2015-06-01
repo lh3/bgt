@@ -18,13 +18,6 @@ typedef struct {
 	kexpr_t *ke;
 } flt_aux_t;
 
-static inline int read1(bgt_t *bgt, bgtm_t *bm, bcf1_t *b)
-{
-	if (bgt) return bgt_read(bgt, b);
-	if (bm)  return bgtm_read(bm, b);
-	return -1;
-}
-
 static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac1, int n_groups, int32_t *gan, int32_t *gac1, void *data)
 {
 	flt_aux_t *flt = (flt_aux_t*)data;
@@ -43,54 +36,9 @@ static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac1, int n_groups, i
 	return !is_true;
 }
 
-static char **get_samples(const char *expr, int *n, int n_pre, char *const* prefix)
-{
-	int err, i, j, is_file = 0;
-	khint_t k;
-	char **s;
-	kexpr_t *ke;
-	khash_t(s2i) *h;
-	FILE *fp;
-
-	*n = 0;
-	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
-		is_file = 1;
-		fclose(fp);
-	}
-	if (*expr == ':' || (*expr != '?' && is_file))
-		return hts_readlines(expr, n);
-	ke = ke_parse(*expr == '?'? expr+1 : expr, &err);
-	if (err) return 0;
-	h = kh_init(s2i);
-	for (j = 0; j < n_pre; ++j) {
-		fmf_t *f;
-		char *tmpfn;
-		int absent;
-		tmpfn = (char*)calloc(strlen(prefix[j]) + 5, 1);
-		strcat(strcpy(tmpfn, prefix[j]), ".spl");
-		f = fmf_read(tmpfn);
-		free(tmpfn);
-		if (f == 0) continue;
-		for (i = 0; i < f->n_rows; ++i)
-			if (fmf_test(f, i, ke)) {
-				k = kh_put(s2i, h, f->rows[i].name, &absent);
-				if (absent) kh_key(h, k) = strdup(f->rows[i].name);
-			}
-		fmf_destroy(f);
-	}
-	ke_destroy(ke);
-	*n = kh_size(h);
-	s = (char**)malloc(*n * sizeof(char*));
-	for (k = i = 0; k < kh_end(h); ++k)
-		if (kh_exist(h, k)) s[i++] = (char*)kh_key(h, k);
-	kh_destroy(s2i, h);
-	return s;
-}
-
 int main_view(int argc, char *argv[])
 {
-	int i, c, out_bcf = 0, clevel = -1, is_multi = 0, multi_flag = 0, excl = 0;
-	bgt_t *bgt = 0;
+	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
 	htsFile *out;
@@ -101,19 +49,18 @@ int main_view(int argc, char *argv[])
 	char *gexpr[BGT_MAX_GROUPS];
 	int n_a = 0, m_a = 0;
 	bgt_allele_t *a = 0;
+	bgt_file_t **files = 0;
 
 	memset(&flt, 0, sizeof(flt_aux_t));
-	assert(strcmp(argv[0], "view") == 0 || strcmp(argv[0], "sview") == 0 || strcmp(argv[0], "mview") == 0);
-	is_multi = strcmp(argv[0], "sview")? 1 : 0;
 	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
 		else if (c == 'e') excl = 1;
 		else if (c == 'B') bed = bed_read(optarg);
-		else if (is_multi && c == 'A') multi_flag |= BGT_F_SET_AC;
-		else if (is_multi && c == 'G') multi_flag |= BGT_F_NO_GT;
-		else if (is_multi && c == 'f') {
+		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
+		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
+		else if (c == 'f') {
 			int err = 0;
 			flt.ke = ke_parse(optarg, &err);
 			assert(err == 0 && flt.ke != 0);
@@ -145,8 +92,7 @@ int main_view(int argc, char *argv[])
 		reg = 0;
 	}
 	if (argc - optind < 1) {
-		fprintf(stderr, "Usage: bgt %s [options] <bgt-prefix>", argv[0]);
-		if (is_multi) fprintf(stderr, " [...]");
+		fprintf(stderr, "Usage: bgt %s [options] <bgt-prefix> [...]", argv[0]);
 		fputc('\n', stderr);
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -b           BCF output\n");
@@ -154,19 +100,17 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "  -l INT       compression level for BCF [detault]\n");
 		fprintf(stderr, "  -B FILE      extract variants overlapping BED FILE [null]\n");
 		fprintf(stderr, "  -e           exclude variants overlapping BED FILE (effective with -B)\n");
-		if (is_multi) {
-			fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
-			fprintf(stderr, "  -G           don't output sample genotype\n");
-			fprintf(stderr, "  -f STR       frequency filters [null]\n");
-			fprintf(stderr, "  -s EXPR      list of samples (see Notes below) [all]\n");
-			fprintf(stderr, "Notes:\n");
-			fprintf(stderr, "  For option -s, EXPR can be one of:\n");
-			fprintf(stderr, "    1) comma-delimited sample list following a colon. e.g. -s:NA12878,NA12044\n");
-			fprintf(stderr, "    2) space-delimited file with the first column giving a sample name. e.g. -s samples.txt\n");
-			fprintf(stderr, "    3) expression if .spl file contains metadata. e.g.: -s\"gender=='M'&&population!='CEU'\"\n");
-			fprintf(stderr, "  If multiple -s is specified, the AC/AN of the first group will be written to VCF INFO AC1/AN1,\n");
-			fprintf(stderr, "  the second to AC2/AN2, etc.\n");
-		}
+		fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
+		fprintf(stderr, "  -G           don't output sample genotype\n");
+		fprintf(stderr, "  -f STR       frequency filters [null]\n");
+		fprintf(stderr, "  -s EXPR      list of samples (see Notes below) [all]\n");
+		fprintf(stderr, "Notes:\n");
+		fprintf(stderr, "  For option -s, EXPR can be one of:\n");
+		fprintf(stderr, "    1) comma-delimited sample list following a colon. e.g. -s:NA12878,NA12044\n");
+		fprintf(stderr, "    2) space-delimited file with the first column giving a sample name. e.g. -s samples.txt\n");
+		fprintf(stderr, "    3) expression if .spl file contains metadata. e.g.: -s\"gender=='M'&&population!='CEU'\"\n");
+		fprintf(stderr, "  If multiple -s is specified, the AC/AN of the first group will be written to VCF INFO AC1/AN1,\n");
+		fprintf(stderr, "  the second to AC2/AN2, etc.\n");
 		return 1;
 	}
 
@@ -181,54 +125,30 @@ int main_view(int argc, char *argv[])
 		sprintf(reg, "%s:%d-%d", a[0].chr.s, min+1, max+1);
 	}
 
-	if (!is_multi) {
-		bgt = bgt_open(argv[optind]);
-		if (reg) bgt_set_region(bgt, reg);
-		if (bed) bgt_set_bed(bgt, bed, excl);
-	} else {
-		bm = bgtm_open(argc - optind, &argv[optind]);
-		bgtm_set_flag(bm, multi_flag);
-		if (flt.ke) bgtm_set_filter(bm, filter_func, &flt);
-		if (reg) bgtm_set_region(bm, reg);
-		if (bed) bgtm_set_bed(bm, bed, excl);
+	n_files = argc - optind;
+	for (i = 0; i < n_files; ++i) files[i] = bgt_open(argv[optind+i]);
 
-		if (n_groups > 0) {
-			char **g[BGT_MAX_GROUPS], **samples;
-			int j, k, ng[BGT_MAX_GROUPS], n_samples = 0;
-			for (i = 0; i < n_groups; ++i) {
-				g[i] = get_samples(gexpr[i], &ng[i], argc - optind, argv + optind);
-				n_samples += ng[i];
-			}
-			samples = (char**)malloc(n_samples * sizeof(char*));
-			for (i = k = 0; i < n_groups; ++i)
-				for (j = 0; j < ng[i]; ++j)
-					samples[k++] = g[i][j];
-			bgtm_set_samples(bm, n_samples, samples);
-			free(samples);
-			if (n_groups > 1)
-				for (i = 0; i < n_groups; ++i)
-					bgtm_add_group(bm, ng[i], g[i]);
-			for (i = 0; i < n_groups; ++i) {
-				for (j = 0; j < ng[i]; ++j) free(g[i][j]);
-				free(g[i]);
-			}
-		}
-	}
+	bm = bgtm_reader_init(n_files, files);
+	bgtm_set_flag(bm, multi_flag);
+	if (flt.ke) bgtm_set_filter(bm, filter_func, &flt);
+	if (reg) bgtm_set_region(bm, reg);
+	if (bed) bgtm_set_bed(bm, bed, excl);
+	for (i = 0; i < n_groups; ++i)
+		bgtm_add_group(bm, gexpr[i]);
 
 	strcpy(modew, "w");
 	if (out_bcf) strcat(modew, "b");
 	sprintf(modew + strlen(modew), "%d", clevel);
 	out = hts_open("-", modew, 0);
-	vcf_hdr_write(out, bgt? bgt->h_out : bm->h_out);
+	vcf_hdr_write(out, bm->h_out);
 
 	b = bcf_init1();
-	while (read1(bgt, bm, b) >= 0)
-		vcf_write1(out, bgt? bgt->h_out : bm->h_out, b);
+	while (bgtm_read(bm, b) >= 0)
+		vcf_write1(out, bm->h_out, b);
 	bcf_destroy1(b);
 
 	hts_close(out);
-	if (bgt) bgt_close(bgt);
-	if (bm) bgtm_close(bm);
+	bgtm_reader_destroy(bm);
 	if (bed) bed_destroy(bed);
 	if (flt.ke) ke_destroy(flt.ke);
 	if (n_a) free(reg);
