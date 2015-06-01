@@ -14,7 +14,7 @@ typedef struct {
 	char **samples;
 
 	pbf_t *pb;
-	htsFile *bcf;
+	BGZF *bcf;
 	bcf_hdr_t *h0; // site-only BCF header
 	bcf1_t *b0; // site-only BCF record
 	hts_idx_t *idx; // BCF index

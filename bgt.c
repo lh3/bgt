@@ -34,8 +34,8 @@ bgt_t *bgt_open(const char *prefix)
 
 	// open BCF and load index
 	sprintf(fn, "%s.bcf", prefix);
-	bgt->bcf = vcf_open(fn, "rb", 0);
-	bgt->h0 = vcf_hdr_read(bgt->bcf);
+	bgt->bcf = bgzf_open(fn, "rb");
+	bgt->h0 = bcf_hdr_read(bgt->bcf);
 	bgt->idx = bcf_index_load(fn);
 	bgt->b0 = bcf_init1();
 
@@ -53,7 +53,7 @@ void bgt_close(bgt_t *bgt)
 	hts_itr_destroy(bgt->itr);
 	hts_idx_destroy(bgt->idx);
 	bcf_hdr_destroy(bgt->h0);
-	vcf_close(bgt->bcf);
+	bgzf_close(bgt->bcf);
 	pbf_close(bgt->pb);
 	for (i = 0; i < bgt->n_samples; ++i)
 		free(bgt->samples[i]);
@@ -122,7 +122,7 @@ int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 int bgt_read_core0(bgt_t *bgt)
 {
 	int i, id, row;
-	row = bgt->itr? bcf_itr_next((BGZF*)bgt->bcf->fp, bgt->itr, bgt->b0) : vcf_read1(bgt->bcf, bgt->h0, bgt->b0);
+	row = bgt->itr? bcf_itr_next(bgt->bcf, bgt->itr, bgt->b0) : bcf_read1(bgt->bcf, bgt->b0);
 	if (row < 0) return row;
 	assert(bgt->b0->n_sample == 0); // there shouldn't be any sample fields
 	row = -1;
