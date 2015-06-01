@@ -1192,3 +1192,18 @@ int bcf_append_info_ints(const bcf_hdr_t *h, bcf1_t *b, const char *key, int n, 
 	return 0;
 }
 
+int bcf_seekn(BGZF *fp, const hts_idx_t *idx, int64_t r)
+{
+	int skip, ret = 0;
+	skip = hts_idx_seekn_aux(fp, idx, r);
+	if (skip > 0) {
+		bcf1_t *b;
+		b = bcf_init1();
+		do {
+			ret = bcf_read1(fp, b);
+			--skip;
+		} while (skip > 0 && ret >= 0);
+		bcf_destroy1(b);
+	}
+	return ret;
+}

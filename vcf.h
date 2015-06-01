@@ -216,6 +216,7 @@ extern "C" {
 	#define bcf_index_load(fn) hts_idx_load(fn, HTS_FMT_CSI)
 
 	int bcf_index_build(const char *fn, int min_shift);
+	int bcf_seekn(BGZF *fp, const hts_idx_t *idx, int64_t n);
 
 	/***************
 	 *** VCF I/O ***

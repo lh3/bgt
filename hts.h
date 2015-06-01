@@ -115,6 +115,7 @@ extern "C" {
 	typedef int (*hts_readrec_f)(BGZF*, void*, void*, int*, int*, int*);
 	typedef int (*hts_name2id_f)(void*, const char*);
 
+	int hts_idx_seekn_aux(BGZF *fp, const hts_idx_t *idx, int64_t n);
 	hts_itr_t *hts_itr_querys(const hts_idx_t *idx, const char *reg, hts_name2id_f getid, void *hdr);
 	int hts_itr_next(BGZF *fp, hts_itr_t *iter, void *r, hts_readrec_f readrec, void *hdr);
 

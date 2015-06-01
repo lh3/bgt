@@ -897,6 +897,13 @@ int hts_itr_next(BGZF *fp, hts_itr_t *iter, void *r, hts_readrec_f readrec, void
 	return ret;
 }
 
+int hts_idx_seekn_aux(BGZF *fp, const hts_idx_t *idx, int64_t r)
+{
+	if (idx->ridx.n == 0 || r >= idx->n_rec) return -1;
+	bgzf_seek(fp, idx->ridx.offset[r>>idx->rec_shift], SEEK_SET);
+	return r & (((1<<idx->rec_shift) - 1));
+}
+
 /**********************
  *** Retrieve index ***
  **********************/
