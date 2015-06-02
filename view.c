@@ -7,9 +7,6 @@
 #include "kexpr.h"
 #include "fmf.h"
 
-#include "khash.h"
-KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
-
 void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 char **hts_readlines(const char *fn, int *_n);
@@ -38,11 +35,12 @@ static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac1, int n_groups, i
 
 int main_view(int argc, char *argv[])
 {
-	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0;
+	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, sample_only = 0;
+	int *match_cnt = 0;
 	long seekn = -1, n_rec = LONG_MAX, n_read = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
-	htsFile *out;
+	htsFile *out = 0;
 	char modew[8], *reg = 0;
 	flt_aux_t flt;
 	void *bed = 0;
@@ -53,7 +51,7 @@ int main_view(int argc, char *argv[])
 	bgt_file_t **files = 0;
 
 	memset(&flt, 0, sizeof(flt_aux_t));
-	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:S")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -61,6 +59,7 @@ int main_view(int argc, char *argv[])
 		else if (c == 'B') bed = bed_read(optarg);
 		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
+		else if (c == 'S') sample_only = 1;
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') {
@@ -106,7 +105,7 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "  -l INT       compression level for BCF [default]\n");
 		fprintf(stderr, "  -B FILE      extract variants overlapping BED FILE [null]\n");
 		fprintf(stderr, "  -e           exclude variants overlapping BED FILE (effective with -B)\n");
-		fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
+		fprintf(stderr, "  -A           write AC/AN to the INFO field\n");
 		fprintf(stderr, "  -G           don't output sample genotype\n");
 		fprintf(stderr, "  -f STR       frequency filters [null]\n");
 		fprintf(stderr, "  -s EXPR      list of samples (see Notes below) [all]\n");
@@ -145,20 +144,45 @@ int main_view(int argc, char *argv[])
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
 
-	strcpy(modew, "w");
-	if (out_bcf) strcat(modew, "b");
-	sprintf(modew + strlen(modew), "%d", clevel);
-	out = hts_open("-", modew, 0);
-	vcf_hdr_write(out, bm->h_out);
+	if (n_a > 0) {
+		for (i = 0; i < n_a; ++i)
+			a[i].rid = bcf_name2id(bm->h_out, a[i].chr.s);
+		match_cnt = (int*)calloc(bm->n_out>>1, sizeof(int));
+	}
+
+	if (!sample_only) {
+		strcpy(modew, "w");
+		if (out_bcf) strcat(modew, "b");
+		sprintf(modew + strlen(modew), "%d", clevel);
+		out = hts_open("-", modew, 0);
+		vcf_hdr_write(out, bm->h_out);
+	}
 
 	b = bcf_init1();
 	while (bgtm_read(bm, b) >= 0 && n_read < n_rec) {
-		vcf_write1(out, bm->h_out, b);
+		if (n_a > 0) {
+			for (i = 0; i < n_a; ++i)
+				if (bgt_al_test(b, &a[i])) break;
+			if (i == n_a) continue;
+			for (i = 0; i < bm->n_out>>1; ++i)
+				match_cnt[i] += ((bm->a[0][i<<1] && !bm->a[1][i<<1]) || (bm->a[0][i<<1|1] && !bm->a[1][i<<1|1]));
+		}
+		if (out) vcf_write1(out, bm->h_out, b);
 		++n_read;
 	}
 	bcf_destroy1(b);
 
-	hts_close(out);
+	if (sample_only && n_a > 0) {
+		for (i = 0; i < bm->n_out>>1; ++i) {
+			if (match_cnt[i] == n_a) {
+				bgt_t *bgt = bm->bgt[bm->sample_idx[i]>>32];
+				printf("%s\t%s\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i]].name, bgt->f->prefix);
+			}
+		}
+	}
+
+	free(match_cnt);
+	if (out) hts_close(out);
 	bgtm_reader_destroy(bm);
 	if (bed) bed_destroy(bed);
 	if (flt.ke) ke_destroy(flt.ke);

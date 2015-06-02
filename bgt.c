@@ -422,7 +422,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		off += bgt->n_out<<1;
 	}
 	assert(off == bm->n_out<<1);
-	if ((bm->flag & BGT_F_SET_AC) || bm->filter_func) {
+	if ((bm->flag & BGT_F_SET_AC) || bm->filter_func || bm->n_groups > 1) {
 		int32_t an, ac[2], cnt[4], gac1[BGT_MAX_GROUPS+1], gan[BGT_MAX_GROUPS+1];
 		memset(cnt, 0, 4 * 4);
 		for (i = 0; i < bm->n_out<<1; ++i)
@@ -461,7 +461,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 				gan[i] = gcnt[i][0] + gcnt[i][1] + gcnt[i][3];
 				gac[0] = gac1[i] = gcnt[i][1];
 				gac[1] = gcnt[i][3];
-				key[0] = 'A', key[1] = 'N', key[2] = '0' + i; bcf_append_info_ints(bm->h_out, b, key, 1, &gan[i]);
+				key[0] = 'A', key[1] = 'N', key[2] = '0' + i; bcf_append_info_ints(bm->h_out, b, key, 1, &gan[i]); // FIXME: single digit only!
 				key[0] = 'A', key[1] = 'C', key[2] = '0' + i; bcf_append_info_ints(bm->h_out, b, key, b->n_allele - 1, gac);
 			}
 		}
@@ -499,7 +499,7 @@ int bgt_al_parse(const char *al, bgt_allele_t *a)
 {
 	char *p = (char*)al, *ref = 0, *alt = 0;
 	int sep = ':', off, tmp;
-	a->chr.l = 0; a->alt = 0; a->pos = -1; a->rlen = -1;
+	a->chr.l = 0; a->al = 0; a->pos = -1; a->rlen = -1; a->rid = -1;
 	for (; *p && *p != sep; ++p);
 	if (*p == 0) return -1;
 	kputsn(al, p - al, &a->chr); kputc(0, &a->chr);
@@ -523,15 +523,27 @@ int bgt_al_parse(const char *al, bgt_allele_t *a)
 	a->pos += off; a->rlen -= off;
 	tmp = a->chr.l;
 	kputs(alt + off, &a->chr);
-	a->alt = a->chr.s + tmp;
+	a->al = a->chr.s + tmp;
 	if (ref) {
-		int l_alt = a->chr.s + a->chr.l - a->alt;
+		int l_alt = a->chr.s + a->chr.l - a->al;
 		int min_l = l_alt < a->rlen? l_alt : a->rlen;
 		ref += off;
-		for (off = 0; off < min_l && isalpha(ref[a->rlen - 1 - off]) && toupper(ref[a->rlen - 1 - off]) == toupper(a->alt[l_alt - 1 - off]); ++off);
+		for (off = 0; off < min_l && isalpha(ref[a->rlen - 1 - off]) && toupper(ref[a->rlen - 1 - off]) == toupper(a->al[l_alt - 1 - off]); ++off);
 		a->rlen -= off;
-		a->alt[l_alt - off] = 0;
+		a->al[l_alt - off] = 0;
 		a->chr.l -= off;
 	}
+	return 0;
+}
+
+int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUST be set
+{
+	int l_ref, l_alt, l_al;
+	char *ref, *alt;
+	if (b->rid != a->rid || b->pos != a->pos || b->rlen != a->rlen) return 0;
+	l_al = strlen(a->al);
+	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
+	if (l_al == l_alt && strncmp(a->al, alt, l_alt) == 0) return 1;
+	if (l_al == l_ref && strncmp(a->al, ref, l_ref) == 0) return 1;
 	return 0;
 }

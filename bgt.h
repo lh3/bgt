@@ -52,8 +52,8 @@ typedef struct {
 
 typedef struct {
 	kstring_t chr;
-	char *alt;
-	int pos, rlen;
+	char *al;
+	int rid, pos, rlen;
 } bgt_allele_t;
 
 bgt_file_t *bgt_open(const char *prefix);
@@ -80,6 +80,6 @@ void bgtm_prepare(bgtm_t *bm);
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
 int bgt_al_parse(const char *al, bgt_allele_t *a);
-int bgt_al_test(const bcf_hdr_t *h, const bcf1_t *b, const bgt_allele_t *a);
+int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a);
 
 #endif
