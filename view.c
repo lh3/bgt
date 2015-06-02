@@ -161,11 +161,17 @@ int main_view(int argc, char *argv[])
 	b = bcf_init1();
 	while (bgtm_read(bm, b) >= 0 && n_read < n_rec) {
 		if (n_a > 0) {
+			int ret, is_ref;
 			for (i = 0; i < n_a; ++i)
-				if (bgt_al_test(b, &a[i])) break;
+				if ((ret = bgt_al_test(b, &a[i])) != 0) break;
 			if (i == n_a) continue;
-			for (i = 0; i < bm->n_out>>1; ++i)
-				match_cnt[i] += ((bm->a[0][i<<1] && !bm->a[1][i<<1]) || (bm->a[0][i<<1|1] && !bm->a[1][i<<1|1]));
+			is_ref = (ret == 2);
+			for (i = 0; i < bm->n_out>>1; ++i) {
+				int g1 = bm->a[0][i<<1|0] | bm->a[1][i<<1|0]<<1;
+				int g2 = bm->a[0][i<<1|1] | bm->a[1][i<<1|1]<<1;
+				if (is_ref) match_cnt[i] += (g1 == 0 || g2 == 0);
+				else match_cnt[i] += (g1 == 1 || g2 == 1);
+			}
 		}
 		if (out) vcf_write1(out, bm->h_out, b);
 		++n_read;

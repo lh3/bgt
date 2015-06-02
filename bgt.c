@@ -544,6 +544,6 @@ int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUS
 	l_al = strlen(a->al);
 	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
 	if (l_al == l_alt && strncmp(a->al, alt, l_alt) == 0) return 1;
-	if (l_al == l_ref && strncmp(a->al, ref, l_ref) == 0) return 1;
+	if (l_al == l_ref && strncmp(a->al, ref, l_ref) == 0) return 2;
 	return 0;
 }
