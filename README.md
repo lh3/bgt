@@ -30,6 +30,8 @@ bgt view -G -f"AN>=20&&AC/AN>.05" -s"population=='GBR'" pre
 bgt view -s"population=='GBR'" -s"population=='FIN'" -Gf'AC1>0&&AC2>0' pre
 # alleles >20% in GBR but <5% in YRI
 bgt view -s"population=='GBR'" -s"population=='YRI'" -Gf'AC1/AN1>.2&&AC2/AN2<.05' pre
+# get samples having both alleles 11:151344:1:T (ref) and 11:160513:1:A (alt)
+bgt view -S -a 11:151344:1:T -a 11:160513:1:A pre
 ```
 1000g BGT can be found at [this FTP link](http://bit.ly/lh3ftp1).
 
