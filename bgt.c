@@ -498,7 +498,7 @@ void bgtm_set_filter(bgtm_t *bm, bgt_filter_f func, void *data) { bm->filter_fun
 int bgt_al_parse(const char *al, bgt_allele_t *a)
 {
 	char *p = (char*)al, *ref = 0, *alt = 0;
-	int sep = ':', off, tmp;
+	int sep = ':', off, tmp, i;
 	a->chr.l = 0; a->al = 0; a->pos = -1; a->rlen = -1; a->rid = -1;
 	for (; *p && *p != sep; ++p);
 	if (*p == 0) return -1;
@@ -514,9 +514,15 @@ int bgt_al_parse(const char *al, bgt_allele_t *a)
 		ref = p;
 		for (; isalpha(*p); ++p);
 		a->rlen = p - ref;
-	} else return -1;
+	} else if (*p == sep) { // a reference allele
+		a->rlen = -1;
+	}
 	if (*p != sep) return -1;
 	alt = ++p;
+	if (a->rlen < 0) {
+		for (i = 0; isalpha(alt[i]); ++i);
+		a->rlen = i;
+	}
 	for (off = 0; *p && isalpha(*p); ++p)
 		if (ref && toupper(*p) == toupper(ref[off])) ++off;
 		else break;
