@@ -232,6 +232,7 @@ hts_idx_t *hts_idx_init(int n, int fmt, uint64_t offset0, int min_shift, int n_l
 	idx = (hts_idx_t*)calloc(1, sizeof(hts_idx_t));
 	idx->fmt = fmt;
 	idx->min_shift = min_shift;
+	idx->rec_shift = HTS_DEF_REC_SHIFT;
 	idx->n_lvls = n_lvls;
 	idx->n_bins = ((1<<(3 * n_lvls + 3)) - 1) / 7;
 	idx->z.save_bin = idx->z.save_tid = idx->z.last_tid = idx->z.last_bin = 0xffffffffu;
@@ -389,17 +390,17 @@ int hts_idx_push(hts_idx_t *idx, int tid, int beg, int end, uint64_t offset, int
 			return 0;
 		}
 	}
-	if (is_mapped) ++idx->z.n_mapped;
-	else ++idx->z.n_unmapped;
-	idx->z.last_off = offset;
-	idx->z.last_coor = beg;
 	if (idx->rec_shift > 0 && (idx->n_rec & ((1<<idx->rec_shift) - 1)) == 0) {
 		if (idx->ridx.n == idx->ridx.m) {
 			idx->ridx.m = idx->ridx.m? idx->ridx.m<<1 : 64;
 			idx->ridx.offset = (uint64_t*)realloc(idx->ridx.offset, idx->ridx.m * 8);
 		}
-		idx->ridx.offset[idx->ridx.n++] = offset;
+		idx->ridx.offset[idx->ridx.n++] = idx->z.last_off;
 	}
+	if (is_mapped) ++idx->z.n_mapped;
+	else ++idx->z.n_unmapped;
+	idx->z.last_off = offset;
+	idx->z.last_coor = beg;
 	++idx->n_rec;
 	return 0;
 }

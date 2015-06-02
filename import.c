@@ -109,3 +109,16 @@ int main_import(int argc, char *argv[])
 	free(fn);
 	return 0;
 }
+
+int main_bcfidx(int argc, char *argv[])
+{
+	int c, min_shift = 14;
+	while ((c = getopt(argc, argv, "s:")) >= 0)
+		if (c == 's') min_shift = atoi(optarg);
+	if (optind == argc) {
+		fprintf(stderr, "Usage: bgt bcfidx [-s minShift] <in.bcf>\n");
+		return 1;
+	}
+	bcf_index_build(argv[optind], min_shift);
+	return 0;
+}

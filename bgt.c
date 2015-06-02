@@ -52,7 +52,6 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 {
 	char *fn;
 	bgt_t *bgt;
-	bcf_hdr_t *h;
 	bgt = (bgt_t*)calloc(1, sizeof(bgt_t));
 	bgt->f = bf;
 	fn = (char*)malloc(strlen(bf->prefix) + 9);
@@ -60,10 +59,8 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 	bgt->pb = pbf_open_r(fn);
 	sprintf(fn, "%s.bcf", bf->prefix);
 	bgt->bcf = bgzf_open(fn, "rb");
-	h = bcf_hdr_read(bgt->bcf);
-	bcf_hdr_destroy(h);
-//	bcf_seekn(bgt->bcf, bgt->f->idx, 0);
 	bgt->b0 = bcf_init1();
+	bcf_seekn(bgt->bcf, bgt->f->idx, 0);
 	bgt->flag = (uint8_t*)calloc(bgt->f->f->n_rows, 1);
 	free(fn);
 	return bgt;

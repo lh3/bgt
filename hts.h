@@ -68,6 +68,8 @@ extern "C" {
 #define HTS_FMT_BAI 1
 #define HTS_FMT_TBI 2
 
+#define HTS_DEF_REC_SHIFT 10
+
 struct __hts_idx_t;
 typedef struct __hts_idx_t hts_idx_t;
 
