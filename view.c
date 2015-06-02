@@ -39,6 +39,7 @@ static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac1, int n_groups, i
 int main_view(int argc, char *argv[])
 {
 	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0;
+	long seekn = -1, n_rec = LONG_MAX, n_read = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
 	htsFile *out;
@@ -52,7 +53,7 @@ int main_view(int argc, char *argv[])
 	bgt_file_t **files = 0;
 
 	memset(&flt, 0, sizeof(flt_aux_t));
-	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -60,6 +61,8 @@ int main_view(int argc, char *argv[])
 		else if (c == 'B') bed = bed_read(optarg);
 		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
+		else if (c == 'i') seekn = atol(optarg) - 1;
+		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') {
 			int err = 0;
 			flt.ke = ke_parse(optarg, &err);
@@ -85,6 +88,7 @@ int main_view(int argc, char *argv[])
 			}
 		}
 	}
+	if (seekn < 0) seekn = 0;
 	if (clevel > 9) clevel = 9;
 	if (n_groups > 1) multi_flag |= BGT_F_SET_AC;
 	if (reg && n_a > 0) {
@@ -97,7 +101,9 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -b           BCF output\n");
 		fprintf(stderr, "  -r STR       region [all]\n");
-		fprintf(stderr, "  -l INT       compression level for BCF [detault]\n");
+		fprintf(stderr, "  -i INT       process from the INT-th record (1-based) [null]\n");
+		fprintf(stderr, "  -n INT       process at most INT records [null]\n");
+		fprintf(stderr, "  -l INT       compression level for BCF [default]\n");
 		fprintf(stderr, "  -B FILE      extract variants overlapping BED FILE [null]\n");
 		fprintf(stderr, "  -e           exclude variants overlapping BED FILE (effective with -B)\n");
 		fprintf(stderr, "  -a           write AC/AN to the INFO field\n");
@@ -134,19 +140,22 @@ int main_view(int argc, char *argv[])
 	if (flt.ke) bgtm_set_filter(bm, filter_func, &flt);
 	if (reg) bgtm_set_region(bm, reg);
 	if (bed) bgtm_set_bed(bm, bed, excl);
+	if (seekn >= 0) bgtm_set_start(bm, seekn);
 	for (i = 0; i < n_groups; ++i)
 		bgtm_add_group(bm, gexpr[i]);
+	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
 
 	strcpy(modew, "w");
 	if (out_bcf) strcat(modew, "b");
 	sprintf(modew + strlen(modew), "%d", clevel);
 	out = hts_open("-", modew, 0);
-	bgtm_prepare(bm);
 	vcf_hdr_write(out, bm->h_out);
 
 	b = bcf_init1();
-	while (bgtm_read(bm, b) >= 0)
+	while (bgtm_read(bm, b) >= 0 && n_read < n_rec) {
 		vcf_write1(out, bm->h_out, b);
+		++n_read;
+	}
 	bcf_destroy1(b);
 
 	hts_close(out);

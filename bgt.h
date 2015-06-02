@@ -63,6 +63,7 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf);
 void bgt_reader_destroy(bgt_t *bgt);
 void bgt_set_bed(bgt_t *bgt, const void *bed, int excl);
 int bgt_set_region(bgt_t *bgt, const char *reg);
+int bgt_set_start(bgt_t *bgt, int64_t n);
 
 int bgt_read(bgt_t *bgt, bcf1_t *b);
 
@@ -72,6 +73,7 @@ void bgtm_set_flag(bgtm_t *bm, int flag);
 void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
+int bgtm_set_start(bgtm_t *bm, int64_t n);
 void bgtm_add_group(bgtm_t *bm, const char *expr);
 void bgtm_prepare(bgtm_t *bm);
 

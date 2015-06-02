@@ -176,6 +176,11 @@ int bgt_set_region(bgt_t *bgt, const char *reg)
 	return bgt->itr? 0 : -1;
 }
 
+int bgt_set_start(bgt_t *bgt, int64_t i)
+{
+	return bcf_seekn(bgt->bcf, bgt->f->idx, i);
+}
+
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
 int bgt_read_core0(bgt_t *bgt)
@@ -361,6 +366,14 @@ int bgtm_set_region(bgtm_t *bm, const char *reg)
 	int i;
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_set_region(bm->bgt[i], reg);
+	return 0;
+}
+
+int bgtm_set_start(bgtm_t *bm, int64_t n)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_set_start(bm->bgt[i], n);
 	return 0;
 }
 
