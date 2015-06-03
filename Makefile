@@ -1,9 +1,9 @@
 CC=			gcc
 CFLAGS=		-g -Wall -O2 -Wc++-compat -Wno-unused-function
 CPPFLAGS=
-OBJS=		kexpr.o bgzf.o hts.o fmf.o vcf.o atomic.o bedidx.o pbwt.o bgt.o import.o view.o
+OBJS=		kexpr.o bgzf.o hts.o fmf.o vcf.o atomic.o bedidx.o pbwt.o bgt.o
 INCLUDES=
-LIBS=		-lpthread -lz -lm
+LIBS=		-L. -lbgt -lpthread -lz -lm
 PROG=		bgt
 PROG_EXTRA= pbfview kexpr fmf
 
@@ -16,8 +16,11 @@ all:$(PROG)
 
 extra:$(PROG_EXTRA)
 
-bgt:$(OBJS) main.o
-		$(CC) $^ -o $@ $(LIBS)
+libbgt.a:$(OBJS)
+		$(AR) -csru $@ $(OBJS)
+
+bgt:libbgt.a main.o import.o view.o
+		$(CC) main.o import.o view.o -o $@ $(LIBS)
 
 pbfview:pbfview.o pbwt.o
 		$(CC) $^ -o $@

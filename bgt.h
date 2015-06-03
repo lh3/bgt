@@ -56,6 +56,10 @@ typedef struct {
 	int rid, pos, rlen;
 } bgt_allele_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 bgt_file_t *bgt_open(const char *prefix);
 void bgt_close(bgt_file_t *bgt);
 
@@ -69,6 +73,7 @@ int bgt_read(bgt_t *bgt, bcf1_t *b);
 
 bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const*fns);
 void bgtm_reader_destroy(bgtm_t *bm);
+void bgtm_set_file(bgtm_t *bm, int i, const bgt_file_t *f); // for go binding
 void bgtm_set_flag(bgtm_t *bm, int flag);
 void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
@@ -81,5 +86,9 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
 int bgt_al_parse(const char *al, bgt_allele_t *a);
 int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
