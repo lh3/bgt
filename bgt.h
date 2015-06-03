@@ -73,7 +73,6 @@ int bgt_read(bgt_t *bgt, bcf1_t *b);
 
 bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const*fns);
 void bgtm_reader_destroy(bgtm_t *bm);
-void bgtm_set_file(bgtm_t *bm, int i, const bgt_file_t *f); // for go binding
 void bgtm_set_flag(bgtm_t *bm, int flag);
 void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);

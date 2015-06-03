@@ -276,8 +276,6 @@ bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const* bf)
 	return bm;
 }
 
-void bgtm_set_file(bgtm_t *bm, int i, const bgt_file_t *f) { bm->bgt[i] = bgt_reader_init(f); }
-
 void bgtm_reader_destroy(bgtm_t *bm)
 {
 	int i;
