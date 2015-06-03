@@ -30,6 +30,11 @@ void bgtm_set_file(bgtm_t *bm, int i, const bgt_file_t *f)
 {
 	bm->bgt[i] = bgt_reader_init(f);
 }
+
+const fmf1_t *fmf_get_row(const fmf_t *f, int r)
+{
+	return &f->rows[r];
+}
 */
 import "C"
 
@@ -129,11 +134,46 @@ func bgtm_reader_init(files [](*C.bgt_file_t)) (*C.bgtm_t) {
 
 func bgs_getvcf(w http.ResponseWriter, r *http.Request) {
 	bm := bgtm_reader_init(bgt_files);
-	defer C.bgtm_reader_destroy(bm);
-
 	r.ParseForm();
 	fmt.Fprintf(w, "s=%s\n", r.Form["s"]);
 	fmt.Fprintf(w, "s=%d\n", len(r.Form["s"]));
+	C.bgtm_reader_destroy(bm);
+}
+
+func bgs_getbgt(w http.ResponseWriter, r *http.Request) {
+	for i := 0; i < len(bgt_files); i += 1 {
+		gstr := C.GoString(bgt_files[i].prefix);
+		fmt.Fprintf(w, "%d\t%s\n", i + 1, gstr);
+	}
+}
+
+func bgs_getspl(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm();
+	_, present := r.Form["q"];
+	if !present {
+		for i := 0; i < len(bgt_files); i += 1 {
+			f := bgt_files[i].f;
+			for j := 0; j < int(f.n_rows); j += 1 {
+				gstr := C.GoString(C.fmf_get_row(f, C.int(j)).name);
+				fmt.Fprintf(w, "%s\t%d\n", gstr, i + 1);
+			}
+		}
+	} else {
+		cstr := C.CString(r.Form["q"][0]); // TODO: throw a warning where there are more
+		var err C.int;
+		ke := C.ke_parse(cstr, &err);
+		C.free(unsafe.Pointer(cstr));
+		for i := 0; i < len(bgt_files); i += 1 {
+			f := bgt_files[i].f;
+			for j := 0; j < int(f.n_rows); j += 1 {
+				if (C.fmf_test(f, C.int(j), ke) != C.int(0)) {
+					gstr := C.GoString(C.fmf_get_row(f, C.int(j)).name);
+					fmt.Fprintf(w, "%s\t%d\n", gstr, i + 1);
+				}
+			}
+		}
+		C.ke_destroy(ke);
+	}
 }
 
 /*****************
@@ -161,5 +201,7 @@ func main() {
 	defer bgtm_close(bgt_files);
 
 	http.HandleFunc("/getvcf", bgs_getvcf);
+	http.HandleFunc("/getbgt", bgs_getbgt);
+	http.HandleFunc("/getsamples", bgs_getspl);
 	http.ListenAndServe(port, nil);
 }
