@@ -181,8 +181,8 @@ int main_view(int argc, char *argv[])
 	if (sample_only && n_a > 0) {
 		for (i = 0; i < bm->n_out>>1; ++i) {
 			if (match_cnt[i] == n_a) {
-				bgt_t *bgt = bm->bgt[bm->sample_idx[i]>>32];
-				printf("%s\t%s\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i]].name, bgt->f->prefix);
+				bgt_t *bgt = bm->bgt[bm->sample_idx[i<<1]>>32];
+				printf("%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i<<1]].name, (int)(bm->sample_idx[i<<1]>>32) + 1);
 			}
 		}
 	}

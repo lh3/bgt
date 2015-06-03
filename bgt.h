@@ -78,6 +78,7 @@ void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_set_start(bgtm_t *bm, int64_t n);
+void bgtm_add_group_core(bgtm_t *bm, int n, char *const* samples, const char *expr);
 void bgtm_add_group(bgtm_t *bm, const char *expr);
 void bgtm_prepare(bgtm_t *bm);
 

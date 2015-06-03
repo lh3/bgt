@@ -31,6 +31,17 @@ void bgtm_set_file(bgtm_t *bm, int i, const bgt_file_t *f)
 	bm->bgt[i] = bgt_reader_init(f);
 }
 
+bgt_t *bgtm_get_bgt(bgtm_t *bm, int i)
+{
+	return bm->bgt[i];
+}
+
+void bgtm_al_set_rid(bgtm_t *bm, bgt_allele_t *a)
+{
+	if (bm->h_out == 0) bgtm_prepare(bm);
+	a->rid = bcf_name2id(bm->h_out, a->chr.s);
+}
+
 const fmf1_t *fmf_get_row(const fmf_t *f, int r)
 {
 	return &f->rows[r];
@@ -149,25 +160,115 @@ func bgs_getbgt(w http.ResponseWriter, r *http.Request) {
 
 func bgs_getspl(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm();
-	_, present := r.Form["q"];
-	var ke *C.kexpr_t = nil;
-	if present {
-		cstr := C.CString(r.Form["q"][0]); // TODO: throw a warning where there are more
-		var err C.int;
-		ke = C.ke_parse(cstr, &err);
-		C.free(unsafe.Pointer(cstr));
+	var expr *C.char = nil;
+	_, present_se := r.Form["se"];
+	if present_se {
+		expr = C.CString(r.Form["se"][0]);
+		defer C.free(unsafe.Pointer(expr));
 	}
-	for i := 0; i < len(bgt_files); i += 1 {
-		f := bgt_files[i].f;
-		for j := 0; j < int(f.n_rows); j += 1 {
-			if ke == nil || C.fmf_test(f, C.int(j), ke) != C.int(0) {
-				gstr := C.GoString(C.fmf_get_row(f, C.int(j)).name);
-				fmt.Fprintf(w, "%s\t%d\n", gstr, i + 1);
+
+	var cstr *C.char = nil;
+	_, present_a := r.Form["al"];
+	if present_a {
+		al := make([]C.bgt_allele_t, len(r.Form["al"]));
+		min_pos := 1<<30;
+		max_pos := 0;
+		for i := 0; i < len(al); i += 1 { // parse al
+			cstr = C.CString(r.Form["al"][i]);
+			C.bgt_al_parse(cstr, &al[i]);
+			C.free(unsafe.Pointer(cstr));
+			if i > 0 && C.strcmp(al[i].chr.s, al[0].chr.s) != 0 { // TODO: for now, only working when all al on the same chr
+				i -= 1;
+			}
+			if min_pos > int(al[i].pos) {
+				min_pos = int(al[i].pos);
+			}
+			if max_pos < int(al[i].pos) {
+				max_pos = int(al[i].pos);
 			}
 		}
-	}
-	if ke != nil {
-		C.ke_destroy(ke);
+		bm := bgtm_reader_init(bgt_files);
+
+		reg := fmt.Sprintf("%s:%d-%d", C.GoString(al[0].chr.s), min_pos+1, max_pos+1);
+		cstr = C.CString(reg);
+		C.bgtm_set_region(bm, cstr);
+		C.free(unsafe.Pointer(cstr));
+
+		if present_se {
+			C.bgtm_add_group_core(bm, 0, nil, expr);
+		}
+
+		C.bgtm_prepare(bm);
+		for i := 0; i < len(al); i += 1 { // parse al
+			C.bgtm_al_set_rid(bm, &al[i]);
+		}
+		b := C.bcf_init1();
+		match_cnt := make([]int, int(bm.n_out)>>1);
+		for {
+			ret := int(C.bgtm_read(bm, b));
+			if ret < 0 {
+				break;
+			}
+			ret = 0;
+			for i := 0; i < len(al); i += 1 {
+				ret = int(C.bgt_al_test(b, &al[i]));
+				if ret != 0 {
+					break;
+				}
+			}
+			if ret == 0 {
+				continue;
+			}
+			is_ref := (ret == 2);
+			a0 := (*[1<<30]C.uint8_t)(unsafe.Pointer(bm.a[0]));
+			a1 := (*[1<<30]C.uint8_t)(unsafe.Pointer(bm.a[1]));
+			for i := 0; i < int(bm.n_out)>>1; i += 1 {
+				g1 := a0[i<<1|0] | a1[i<<1|0]<<1;
+				g2 := a0[i<<1|1] | a1[i<<1|1]<<1;
+				if (is_ref) {
+					if g1 == 0 || g2 == 0 {
+						match_cnt[i] += 1;
+					}
+				} else {
+					if g1 == 1 || g2 == 1 {
+						match_cnt[i] += 1;
+					}
+				}
+			}
+		}
+		C.bcf_destroy1(b);
+
+		sidx := (*[1<<30]C.uint64_t)(unsafe.Pointer(bm.sample_idx));
+		for i := 0; i < int(bm.n_out)>>1; i += 1 {
+			if match_cnt[i] == len(al) {
+				bgt := C.bgtm_get_bgt(bm, C.int(int64(sidx[i<<1])>>32));
+				gstr := C.GoString(C.fmf_get_row(bgt.f.f, C.int(sidx[i<<1])).name);
+				fmt.Fprintf(w, "%s\t%d\n", gstr, int(sidx[i<<1]>>32) + 1);
+			}
+		}
+
+		C.bgtm_reader_destroy(bm);
+		for i := 0; i < len(al); i += 1 { // free al
+			C.free(unsafe.Pointer(al[i].chr.s));
+		}
+	} else {
+		var ke *C.kexpr_t = nil;
+		if present_se {
+			var err C.int;
+			ke = C.ke_parse(expr, &err);
+		}
+		for i := 0; i < len(bgt_files); i += 1 {
+			f := bgt_files[i].f;
+			for j := 0; j < int(f.n_rows); j += 1 {
+				if ke == nil || C.fmf_test(f, C.int(j), ke) != C.int(0) {
+					gstr := C.GoString(C.fmf_get_row(f, C.int(j)).name);
+					fmt.Fprintf(w, "%s\t%d\n", gstr, i + 1);
+				}
+			}
+		}
+		if ke != nil {
+			C.ke_destroy(ke);
+		}
 	}
 }
 
