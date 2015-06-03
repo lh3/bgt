@@ -150,28 +150,23 @@ func bgs_getbgt(w http.ResponseWriter, r *http.Request) {
 func bgs_getspl(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm();
 	_, present := r.Form["q"];
-	if !present {
-		for i := 0; i < len(bgt_files); i += 1 {
-			f := bgt_files[i].f;
-			for j := 0; j < int(f.n_rows); j += 1 {
+	var ke *C.kexpr_t = nil;
+	if present {
+		cstr := C.CString(r.Form["q"][0]); // TODO: throw a warning where there are more
+		var err C.int;
+		ke = C.ke_parse(cstr, &err);
+		C.free(unsafe.Pointer(cstr));
+	}
+	for i := 0; i < len(bgt_files); i += 1 {
+		f := bgt_files[i].f;
+		for j := 0; j < int(f.n_rows); j += 1 {
+			if ke == nil || C.fmf_test(f, C.int(j), ke) != C.int(0) {
 				gstr := C.GoString(C.fmf_get_row(f, C.int(j)).name);
 				fmt.Fprintf(w, "%s\t%d\n", gstr, i + 1);
 			}
 		}
-	} else {
-		cstr := C.CString(r.Form["q"][0]); // TODO: throw a warning where there are more
-		var err C.int;
-		ke := C.ke_parse(cstr, &err);
-		C.free(unsafe.Pointer(cstr));
-		for i := 0; i < len(bgt_files); i += 1 {
-			f := bgt_files[i].f;
-			for j := 0; j < int(f.n_rows); j += 1 {
-				if (C.fmf_test(f, C.int(j), ke) != C.int(0)) {
-					gstr := C.GoString(C.fmf_get_row(f, C.int(j)).name);
-					fmt.Fprintf(w, "%s\t%d\n", gstr, i + 1);
-				}
-			}
-		}
+	}
+	if ke != nil {
 		C.ke_destroy(ke);
 	}
 }
