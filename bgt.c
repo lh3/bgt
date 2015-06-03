@@ -268,10 +268,8 @@ bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const* bf)
 	bm = (bgtm_t*)calloc(1, sizeof(bgtm_t));
 	bm->n_bgt = n_files;
 	bm->bgt = (bgt_t**)calloc(bm->n_bgt, sizeof(void*));
-	if (bf) {
-		for (i = 0; i < bm->n_bgt; ++i)
-			bm->bgt[i] = bgt_reader_init(bf[i]);
-	}
+	for (i = 0; i < bm->n_bgt; ++i)
+		bm->bgt[i] = bgt_reader_init(bf[i]);
 	bm->r = (bgt_rec_t*)calloc(bm->n_bgt, sizeof(bgt_rec_t));
 	return bm;
 }

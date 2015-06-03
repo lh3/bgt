@@ -16,6 +16,16 @@ import (
 #include <string.h>
 #include "bgt.h"
 
+bgtm_t *bgtm_reader_init_n(int n_files)
+{
+	bgtm_t *bm;
+	bm = (bgtm_t*)calloc(1, sizeof(bgtm_t));
+	bm->n_bgt = n_files;
+	bm->bgt = (bgt_t**)calloc(bm->n_bgt, sizeof(void*));
+	bm->r = (bgt_rec_t*)calloc(bm->n_bgt, sizeof(bgt_rec_t));
+	return bm;
+}
+
 void bgtm_set_file(bgtm_t *bm, int i, const bgt_file_t *f)
 {
 	bm->bgt[i] = bgt_reader_init(f);
@@ -106,7 +116,7 @@ func bgtm_close(files [](*C.bgt_file_t)) {
 }
 
 func bgtm_reader_init(files [](*C.bgt_file_t)) (*C.bgtm_t) {
-	bm := C.bgtm_reader_init(C.int(len(files)), nil);
+	bm := C.bgtm_reader_init_n(C.int(len(files)));
 	for i := 0; i < len(files); i += 1 {
 		C.bgtm_set_file(bm, C.int(i), files[i]);
 	}
