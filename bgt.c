@@ -589,11 +589,10 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 	assert(off == bm->n_out<<1);
 	if (bm->n_al > 0) {
 		int ret;
-	//	fprintf(stderr, "%d\n", b->pos);
 		for (i = 0; i < bm->n_al; ++i) // NOTE: this is a quadratic algorithm; could be better
 			if ((ret = bgt_al_test(b, &bm->al[i])) != 0) break;
 		if (i == bm->n_al) return 1; // not matching any requested alleles
-		if (i < bm->n_al && bm->alcnt) {
+		if (i < bm->n_al && (bm->flag&BGT_F_CNT_AL) && bm->alcnt) {
 			int is_ref = (ret == 2);
 			for (i = 0; i < bm->n_out>>1; ++i) {
 				int g1 = bm->a[0][i<<1|0] | bm->a[1][i<<1|0]<<1;
