@@ -157,13 +157,15 @@ func bgs_getbgt(w http.ResponseWriter, r *http.Request) {
 }
 
 func bgs_getspl(w http.ResponseWriter, r *http.Request) {
+	r.URL.RawQuery = strings.Replace(r.URL.RawQuery, "&&", ".AND.", -1);
 	r.ParseForm();
 	var expr *C.char = nil;
 	_, present_se := r.Form["se"];
 	if present_se {
-		s := strings.Replace(r.Form["se"][0], ".and.", "&&", -1);
-		s = strings.Replace(s, ".or.", "||", -1);
-		s = strings.Replace(s, "@", "&", -1);
+		s := strings.Replace(r.Form["se"][0], ".AND.", "&&", -1);
+		s = strings.Replace(s, ".and.", "&&", -1);
+		s = strings.Replace(s, ".OR.", "||", -1);
+		s = strings.Replace(s, ".or.", "&&", -1);
 		expr = C.CString(s);
 		defer C.free(unsafe.Pointer(expr));
 	}
