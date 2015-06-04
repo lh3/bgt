@@ -7,6 +7,7 @@
 
 #define BGT_F_SET_AC    0x0001
 #define BGT_F_NO_GT     0x0002
+#define BGT_F_CNT_AL    0x0004
 
 #define BGT_MAX_GROUPS  32
 #define BGT_MAX_ALLELES 64
@@ -60,6 +61,7 @@ typedef struct {
 
 	int n_al, m_al;
 	bgt_allele_t *al;
+	int *alcnt;
 } bgtm_t;
 
 #ifdef __cplusplus

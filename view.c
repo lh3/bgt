@@ -14,7 +14,6 @@ char **hts_readlines(const char *fn, int *_n);
 int main_view(int argc, char *argv[])
 {
 	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, sample_only = 0;
-	int *match_cnt = 0;
 	long seekn = -1, n_rec = LONG_MAX, n_read = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
@@ -34,7 +33,7 @@ int main_view(int argc, char *argv[])
 		else if (c == 'B') bed = bed_read(optarg);
 		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
-		else if (c == 'S') multi_flag |= BGT_F_NO_GT, sample_only = 1;
+		else if (c == 'S') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_AL, sample_only = 1;
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
@@ -85,9 +84,6 @@ int main_view(int argc, char *argv[])
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
 
-	if (bm->n_al > 0)
-		match_cnt = (int*)calloc(bm->n_out>>1, sizeof(int));
-
 	if (!sample_only) {
 		strcpy(modew, "w");
 		if (out_bcf) strcat(modew, "b");
@@ -98,19 +94,6 @@ int main_view(int argc, char *argv[])
 
 	b = bcf_init1();
 	while (bgtm_read(bm, b) >= 0 && n_read < n_rec) {
-		if (bm->n_al > 0) {
-			int ret, is_ref;
-			for (i = 0; i < bm->n_al; ++i)
-				if ((ret = bgt_al_test(b, &bm->al[i])) != 0) break;
-			if (i == bm->n_al) continue;
-			is_ref = (ret == 2);
-			for (i = 0; i < bm->n_out>>1; ++i) {
-				int g1 = bm->a[0][i<<1|0] | bm->a[1][i<<1|0]<<1;
-				int g2 = bm->a[0][i<<1|1] | bm->a[1][i<<1|1]<<1;
-				if (is_ref) match_cnt[i] += (g1 == 0 || g2 == 0);
-				else match_cnt[i] += (g1 == 1 || g2 == 1);
-			}
-		}
 		if (out) vcf_write1(out, bm->h_out, b);
 		++n_read;
 	}
@@ -118,14 +101,13 @@ int main_view(int argc, char *argv[])
 
 	if (sample_only && bm->n_al > 0) {
 		for (i = 0; i < bm->n_out>>1; ++i) {
-			if (match_cnt[i] == bm->n_al) {
+			if (bm->alcnt[i] == bm->n_al) {
 				bgt_t *bgt = bm->bgt[bm->sample_idx[i<<1]>>32];
 				printf("%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i<<1]].name, (int)(bm->sample_idx[i<<1]>>32) + 1);
 			}
 		}
 	}
 
-	free(match_cnt);
 	if (out) hts_close(out);
 	bgtm_reader_destroy(bm);
 	if (bed) bed_destroy(bed);

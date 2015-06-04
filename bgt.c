@@ -289,6 +289,7 @@ bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const* bf)
 void bgtm_reader_destroy(bgtm_t *bm)
 {
 	int i;
+	free(bm->alcnt);
 	if (bm->site_flt) ke_destroy(bm->site_flt);
 	free(bm->group);
 	free(bm->sample_idx);
@@ -447,7 +448,7 @@ void bgtm_prepare(bgtm_t *bm)
 		for (i = 0; i < bm->n_al; ++i) {
 			bgt_allele_t *a = &bm->al[i];
 			min_pos = min_pos < a->pos? min_pos : a->pos;
-			max_pos = max_pos < a->pos? max_pos : a->pos;
+			max_pos = max_pos > a->pos? max_pos : a->pos;
 			if (a->rid < 0 || a->rid != bm->al[i].rid) break;
 		}
 		if (i == bm->n_al) {
@@ -457,6 +458,8 @@ void bgtm_prepare(bgtm_t *bm)
 		}
 	}
 
+	if (bm->n_al > 0 && (bm->flag&BGT_F_CNT_AL))
+		bm->alcnt = (int*)calloc(bm->n_out>>1, sizeof(int));
 }
 
 /*** read into BCF ***/
@@ -584,6 +587,22 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		off += bgt->n_out<<1;
 	}
 	assert(off == bm->n_out<<1);
+	if (bm->n_al > 0) {
+		int ret;
+	//	fprintf(stderr, "%d\n", b->pos);
+		for (i = 0; i < bm->n_al; ++i) // NOTE: this is a quadratic algorithm; could be better
+			if ((ret = bgt_al_test(b, &bm->al[i])) != 0) break;
+		if (i == bm->n_al) return 1; // not matching any requested alleles
+		if (i < bm->n_al && bm->alcnt) {
+			int is_ref = (ret == 2);
+			for (i = 0; i < bm->n_out>>1; ++i) {
+				int g1 = bm->a[0][i<<1|0] | bm->a[1][i<<1|0]<<1;
+				int g2 = bm->a[0][i<<1|1] | bm->a[1][i<<1|1]<<1;
+				if (is_ref) bm->alcnt[i] += (g1 == 0 || g2 == 0);
+				else bm->alcnt[i] += (g1 == 1 || g2 == 1);
+			}
+		}
+	}
 	// fill AC/AN/etc and test site_flt
 	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_groups > 1) {
 		bgt_info_t ss;
