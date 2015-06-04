@@ -146,8 +146,6 @@ func bgtm_reader_init(files [](*C.bgt_file_t)) (*C.bgtm_t) {
 func bgs_getvcf(w http.ResponseWriter, r *http.Request) {
 	bm := bgtm_reader_init(bgt_files);
 	r.ParseForm();
-	fmt.Fprintf(w, "s=%s\n", r.Form["s"]);
-	fmt.Fprintf(w, "s=%d\n", len(r.Form["s"]));
 	C.bgtm_reader_destroy(bm);
 }
 
@@ -163,7 +161,10 @@ func bgs_getspl(w http.ResponseWriter, r *http.Request) {
 	var expr *C.char = nil;
 	_, present_se := r.Form["se"];
 	if present_se {
-		expr = C.CString(r.Form["se"][0]);
+		s := strings.Replace(r.Form["se"][0], ".and.", "&&", -1);
+		s = strings.Replace(s, ".or.", "||", -1);
+		s = strings.Replace(s, "@", "&", -1);
+		expr = C.CString(s);
 		defer C.free(unsafe.Pointer(expr));
 	}
 

@@ -8,7 +8,7 @@
 #define BGT_F_SET_AC    0x0001
 #define BGT_F_NO_GT     0x0002
 
-#define BGT_MAX_GROUPS  8
+#define BGT_MAX_GROUPS  32
 
 #define BGT_SET_ALL_SAMPLES (-1)
 
@@ -27,7 +27,7 @@ typedef struct {
 	hts_itr_t *itr;
 	const void *bed;
 	int bed_excl, n_out, n_groups, *out;
-	uint8_t *group, *flag;
+	uint32_t *group, *flag;
 	bcf_hdr_t *h_out;
 } bgt_t;
 
@@ -36,17 +36,19 @@ typedef struct { // during reading, these are all links
 	const uint8_t *a[2];
 } bgt_rec_t;
 
-typedef int (*bgt_filter_f)(bcf_hdr_t *h, bcf1_t *b, int an, int ac, int n_groups, int32_t *gan, int32_t *gac1, void *data);
+typedef struct {
+	int32_t ac[2], an, n_groups;
+	int32_t gan[BGT_MAX_GROUPS], gac[BGT_MAX_GROUPS][2];
+} bgt_info_t;
 
 typedef struct {
 	int n_bgt, n_out, n_groups, flag;
 	uint64_t *sample_idx;
-	uint8_t *group;
+	uint32_t *group;
 	bgt_t **bgt;
 	bgt_rec_t *r;
+	kexpr_t *site_flt;
 	bcf_hdr_t *h_out;
-	bgt_filter_f filter_func;
-	void *filter_data;
 	uint8_t *a[2];
 } bgtm_t;
 
@@ -74,7 +76,7 @@ int bgt_read(bgt_t *bgt, bcf1_t *b);
 bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const*fns);
 void bgtm_reader_destroy(bgtm_t *bm);
 void bgtm_set_flag(bgtm_t *bm, int flag);
-void bgtm_set_filter(bgtm_t *bm, bgt_filter_f flt, void *flt_data);
+int bgtm_set_flt_site(bgtm_t *bm, const char *expr);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_set_start(bgtm_t *bm, int64_t n);

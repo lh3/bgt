@@ -11,28 +11,6 @@ void *bed_read(const char *fn);
 void bed_destroy(void *_h);
 char **hts_readlines(const char *fn, int *_n);
 
-typedef struct {
-	kexpr_t *ke;
-} flt_aux_t;
-
-static int filter_func(bcf_hdr_t *h, bcf1_t *b, int an, int ac1, int n_groups, int32_t *gan, int32_t *gac1, void *data)
-{
-	flt_aux_t *flt = (flt_aux_t*)data;
-	int is_true, err, i;
-	char key[4];
-	if (flt->ke == 0) return 0;
-	ke_set_int(flt->ke, "AN", an);
-	ke_set_int(flt->ke, "AC", ac1);
-	key[3] = 0;
-	for (i = 1; i <= n_groups; ++i) {
-		key[0] = 'A', key[1] = 'N', key[2] = '0' + i; ke_set_int(flt->ke, key, gan[i]);
-		key[0] = 'A', key[1] = 'C', key[2] = '0' + i; ke_set_int(flt->ke, key, gac1[i]);
-	}
-	is_true = !!ke_eval_int(flt->ke, &err);
-	if (err) return 0;
-	return !is_true;
-}
-
 int main_view(int argc, char *argv[])
 {
 	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, sample_only = 0;
@@ -41,8 +19,7 @@ int main_view(int argc, char *argv[])
 	bgtm_t *bm = 0;
 	bcf1_t *b;
 	htsFile *out = 0;
-	char modew[8], *reg = 0;
-	flt_aux_t flt;
+	char modew[8], *reg = 0, *site_flt = 0;
 	void *bed = 0;
 	int n_groups = 0;
 	char *gexpr[BGT_MAX_GROUPS];
@@ -50,7 +27,6 @@ int main_view(int argc, char *argv[])
 	bgt_allele_t *a = 0;
 	bgt_file_t **files = 0;
 
-	memset(&flt, 0, sizeof(flt_aux_t));
 	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:S")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
@@ -59,14 +35,11 @@ int main_view(int argc, char *argv[])
 		else if (c == 'B') bed = bed_read(optarg);
 		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
-		else if (c == 'S') sample_only = 1;
+		else if (c == 'S') multi_flag |= BGT_F_NO_GT, sample_only = 1;
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
-		else if (c == 'f') {
-			int err = 0;
-			flt.ke = ke_parse(optarg, &err);
-			assert(err == 0 && flt.ke != 0);
-		} else if (c == 's' && n_groups < BGT_MAX_GROUPS) {
+		else if (c == 'f') site_flt = optarg;
+		else if (c == 's' && n_groups < BGT_MAX_GROUPS) {
 			gexpr[n_groups++] = optarg;
 		} else if (c == 'a') {
 			bgt_allele_t *p;
@@ -136,7 +109,7 @@ int main_view(int argc, char *argv[])
 
 	bm = bgtm_reader_init(n_files, files);
 	bgtm_set_flag(bm, multi_flag);
-	if (flt.ke) bgtm_set_filter(bm, filter_func, &flt);
+	if (site_flt) bgtm_set_flt_site(bm, site_flt);
 	if (reg) bgtm_set_region(bm, reg);
 	if (bed) bgtm_set_bed(bm, bed, excl);
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
@@ -191,7 +164,6 @@ int main_view(int argc, char *argv[])
 	if (out) hts_close(out);
 	bgtm_reader_destroy(bm);
 	if (bed) bed_destroy(bed);
-	if (flt.ke) ke_destroy(flt.ke);
 	if (n_a) free(reg);
 	for (i = 0; i < n_a; ++i) free(a[i].chr.s);
 	free(a);

@@ -52,6 +52,7 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 {
 	char *fn;
 	bgt_t *bgt;
+	assert(BGT_MAX_GROUPS <= 32);
 	bgt = (bgt_t*)calloc(1, sizeof(bgt_t));
 	bgt->f = bf;
 	fn = (char*)malloc(strlen(bf->prefix) + 9);
@@ -61,7 +62,7 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 	bgt->bcf = bgzf_open(fn, "rb");
 	bgt->b0 = bcf_init1();
 	bcf_seekn(bgt->bcf, bgt->f->idx, 0);
-	bgt->flag = (uint8_t*)calloc(bgt->f->f->n_rows, 1);
+	bgt->flag = (uint32_t*)calloc(bgt->f->f->n_rows, 4);
 	free(fn);
 	return bgt;
 }
@@ -138,7 +139,7 @@ void bgt_prepare(bgt_t *bgt)
 	for (i = 0, bgt->n_out = 0; i < f->n_rows; ++i)
 		if (bgt->flag[i]) ++bgt->n_out;
 	bgt->out = (int*)realloc(bgt->out, bgt->n_out * sizeof(int));
-	bgt->group = (uint8_t*)realloc(bgt->group, bgt->n_out);
+	bgt->group = (uint32_t*)realloc(bgt->group, bgt->n_out * 4);
 	for (i = 0, bgt->n_out = 0; i < f->n_rows; ++i)
 		if (bgt->flag[i]) bgt->out[bgt->n_out] = i, bgt->group[bgt->n_out++] = bgt->flag[i];
 
@@ -277,6 +278,7 @@ bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const* bf)
 void bgtm_reader_destroy(bgtm_t *bm)
 {
 	int i;
+	if (bm->site_flt) ke_destroy(bm->site_flt);
 	free(bm->group);
 	free(bm->sample_idx);
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
@@ -313,7 +315,7 @@ void bgtm_prepare(bgtm_t *bm)
 		bgt_prepare(bm->bgt[i]);
 		bm->n_out += bm->bgt[i]->n_out;
 	}
-	bm->group = (uint8_t*)realloc(bm->group, bm->n_out);
+	bm->group = (uint32_t*)realloc(bm->group, bm->n_out * 4);
 	bm->sample_idx = (uint64_t*)realloc(bm->sample_idx, bm->n_out * 8);
 	for (i = m = 0; i < bm->n_bgt; ++i) {
 		for (j = 0; j < bm->bgt[i]->n_out; ++j) {
@@ -326,7 +328,7 @@ void bgtm_prepare(bgtm_t *bm)
 	kputs("##fileformat=VCFv4.1\n", &h);
 	kputs("##INFO=<ID=AC,Number=A,Type=String,Description=\"Count of alternate alleles\">\n", &h);
 	kputs("##INFO=<ID=AN,Number=A,Type=String,Description=\"Count of total alleles\">\n", &h);
-	for (i = 1; i <= BGT_MAX_GROUPS; ++i) {
+	for (i = 1; i <= bm->n_groups; ++i) {
 		ksprintf(&h, "##INFO=<ID=AC%d,Number=A,Type=String,Description=\"Count of alternate alleles for sample group %d\">\n", i, i);
 		ksprintf(&h, "##INFO=<ID=AN%d,Number=A,Type=String,Description=\"Count of total alleles for sample group %d\">\n", i, i);
 	}
@@ -377,6 +379,96 @@ int bgtm_set_start(bgtm_t *bm, int64_t n)
 	return 0;
 }
 
+int bgtm_set_flt_site(bgtm_t *bm, const char *expr)
+{
+	int err;
+	if (bm->site_flt) ke_destroy(bm->site_flt);
+	bm->site_flt = ke_parse(expr, &err);
+	if (err != 0) {
+		if (bm->site_flt) ke_destroy(bm->site_flt);
+		bm->site_flt = 0;
+		return err;
+	}
+	return 0;
+}
+
+static inline char *gen_group_key(char key[5], char nc, int g)
+{
+	key[0] = 'A'; key[1] = nc;
+	if (g < 9) key[2] = '0' + (g+1), key[3] = 0;
+	else key[2] = '0' + (g+1)/10, key[3] = '0' + (g+1)%10, key[4] = 0;
+	return key;
+}
+
+int bgtm_pass_site_flt(const bgt_info_t *ss, kexpr_t *flt)
+{
+	int is_true, err, i;
+	char key[5];
+	if (flt == 0) return 1;
+	ke_set_int(flt, "AN", ss->an);
+	ke_set_int(flt, "AC", ss->ac[0]);
+	for (i = 0; i < ss->n_groups; ++i) {
+		ke_set_int(flt, gen_group_key(key, 'N', i), ss->gan[i]);
+		ke_set_int(flt, gen_group_key(key, 'C', i), ss->gac[i][0]);
+	}
+	is_true = !!ke_eval_int(flt, &err);
+	return err? 0 : is_true;
+}
+
+void bgtm_fill_info(const bcf_hdr_t *h, const bgt_info_t *ss, bcf1_t *b)
+{
+	bcf_append_info_ints(h, b, "AN", 1, &ss->an);
+	bcf_append_info_ints(h, b, "AC", b->n_allele - 1, ss->ac);
+	if (ss->n_groups > 1) {
+		int i;
+		char key[5];
+		for (i = 0; i < ss->n_groups; ++i) {
+			bcf_append_info_ints(h, b, gen_group_key(key, 'N', i), 1, &ss->gan[i]);
+			bcf_append_info_ints(h, b, gen_group_key(key, 'C', i), b->n_allele - 1, ss->gac[i]);
+		}
+	}
+}
+
+void bgtm_cal_info(const bgtm_t *bm, bgt_info_t *ss)
+{
+	int32_t cnt[4], i;
+	memset(cnt, 0, 4 * 4);
+	ss->n_groups = bm->n_groups;
+	for (i = 0; i < bm->n_out<<1; ++i)
+		++cnt[bm->a[1][i]<<1 | bm->a[0][i]];
+	ss->an = cnt[0] + cnt[1] + cnt[3];
+	ss->ac[0] = cnt[1], ss->ac[1] = cnt[3];
+	if (bm->n_groups > 1) {
+		int32_t gcnt[BGT_MAX_GROUPS][4];
+		memset(gcnt, 0, 4 * BGT_MAX_GROUPS * 4);
+		// the following two blocks achieve the same goal. The 1st is faster if there are not many samples
+		if (bm->n_out<<1 < 1024) {
+			int32_t j;
+			for (i = 0; i < bm->n_out<<1; ++i) {
+				int ht = bm->a[1][i]<<1 | bm->a[0][i];
+				if (bm->group[i>>1])
+					for (j = 0; j < bm->n_groups; ++j)
+						if (bm->group[i>>1] & 1<<j) ++gcnt[j][ht];
+			}
+		} else {
+			int32_t j, k, gcnt256[256][4];
+			memset(gcnt256, 0, 256 * 4 * 4);
+			for (i = 0; i < bm->n_out<<1; ++i)
+				++gcnt256[bm->group[i>>1]][bm->a[1][i]<<1 | bm->a[0][i]];
+			for (i = 0; i < 256; ++i)
+				for (j = 0; j < bm->n_groups; ++j)
+					if (i & 1<<j)
+						for (k = 0; k < 4; ++k)
+							gcnt[j][k] += gcnt256[i][k];
+		}
+		for (i = 0; i < bm->n_groups; ++i) {
+			ss->gan[i] = gcnt[i][0] + gcnt[i][1] + gcnt[i][3];
+			ss->gac[i][0] = gcnt[i][1];
+			ss->gac[i][1] = gcnt[i][3];
+		}
+	}
+}
+
 int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 {
 	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref;
@@ -401,6 +493,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		} else b0 = r->b0, max_allele = b0->n_allele;
 	}
 	assert(b0 && max_allele >= 2);
+	// fill bcf1_t up to INFO, excluding AC/AN/etc
 	l_ref = bcfcpy_min(b, b0, max_allele > 2? "<M>" : 0);
 	if (l_ref != b->rlen) {
 		int32_t val = b->pos + b->rlen;
@@ -422,54 +515,14 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		off += bgt->n_out<<1;
 	}
 	assert(off == bm->n_out<<1);
-	if ((bm->flag & BGT_F_SET_AC) || bm->filter_func || bm->n_groups > 1) {
-		int32_t an, ac[2], cnt[4], gac1[BGT_MAX_GROUPS+1], gan[BGT_MAX_GROUPS+1];
-		memset(cnt, 0, 4 * 4);
-		for (i = 0; i < bm->n_out<<1; ++i)
-			++cnt[bm->a[1][i]<<1 | bm->a[0][i]];
-		an = cnt[0] + cnt[1] + cnt[3];
-		ac[0] = cnt[1], ac[1] = cnt[3];
-		bcf_append_info_ints(bm->h_out, b, "AN", 1, &an);
-		bcf_append_info_ints(bm->h_out, b, "AC", b->n_allele - 1, ac);
-		if (bm->n_groups > 1) {
-			int32_t gcnt[BGT_MAX_GROUPS+1][4];
-			memset(gcnt, 0, 4 * (BGT_MAX_GROUPS+1) * 4);
-			// the following two blocks achieve the same goal. The 1st is faster if there are not many samples
-			if (bm->n_out<<1 < 1024) {
-				int32_t j;
-				for (i = 0; i < bm->n_out<<1; ++i) {
-					int ht = bm->a[1][i]<<1 | bm->a[0][i];
-					if (bm->group[i>>1])
-						for (j = 0; j < bm->n_groups; ++j)
-							if (bm->group[i>>1] & 1<<j) ++gcnt[j+1][ht];
-				}
-			} else {
-				int32_t j, k, gcnt256[256][4];
-				memset(gcnt256, 0, 256 * 4 * 4);
-				for (i = 0; i < bm->n_out<<1; ++i)
-					++gcnt256[bm->group[i>>1]][bm->a[1][i]<<1 | bm->a[0][i]];
-				for (i = 0; i < 256; ++i)
-					for (j = 0; j < bm->n_groups; ++j)
-						if (i & 1<<j)
-							for (k = 0; k < 4; ++k)
-								gcnt[j+1][k] += gcnt256[i][k];
-			}
-			for (i = 1; i <= bm->n_groups; ++i) {
-				char key[4];
-				int32_t gac[2];
-				key[3] = 0;
-				gan[i] = gcnt[i][0] + gcnt[i][1] + gcnt[i][3];
-				gac[0] = gac1[i] = gcnt[i][1];
-				gac[1] = gcnt[i][3];
-				key[0] = 'A', key[1] = 'N', key[2] = '0' + i; bcf_append_info_ints(bm->h_out, b, key, 1, &gan[i]); // FIXME: single digit only!
-				key[0] = 'A', key[1] = 'C', key[2] = '0' + i; bcf_append_info_ints(bm->h_out, b, key, b->n_allele - 1, gac);
-			}
-		}
-		if (bm->filter_func && bm->filter_func(bm->h_out, b, an, ac[0], bm->n_groups, gan, gac1, bm->filter_data))
+	// fill AC/AN/etc and test site_flt
+	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_groups > 1) {
+		bgt_info_t ss;
+		bgtm_cal_info(bm, &ss);
+		bgtm_fill_info(bm->h_out, &ss, b);
+		if (!bgtm_pass_site_flt(&ss, bm->site_flt))
 			return 1;
 	}
-	if ((bm->flag & BGT_F_NO_GT) == 0)
-		bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
 	return 0;
 }
 
@@ -478,6 +531,8 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	int ret;
 	if (bm->h_out == 0) bgtm_prepare(bm);
 	while ((ret = bgtm_read_core(bm, b)) > 0);
+	if ((bm->flag & BGT_F_NO_GT) == 0)
+		bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
 	return ret;
 }
 
@@ -489,7 +544,6 @@ void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl)
 }
 
 void bgtm_set_flag(bgtm_t *bm, int flag) { bm->flag = flag; }
-void bgtm_set_filter(bgtm_t *bm, bgt_filter_f func, void *data) { bm->filter_func = func; bm->filter_data = data; }
 
 /******************
  * Allele parsing *
