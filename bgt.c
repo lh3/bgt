@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <limits.h>
 #include <ctype.h>
 #include "bgt.h"
 #include "kstring.h"
@@ -293,6 +294,8 @@ void bgtm_reader_destroy(bgtm_t *bm)
 	free(bm->sample_idx);
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
 	free(bm->a[0]); free(bm->a[1]);
+	for (i = 0; i < bm->n_al; ++i) free(bm->al[i].chr.s);
+	free(bm->al);
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_reader_destroy(bm->bgt[i]);
 	free(bm->r); free(bm->bgt); free(bm);
@@ -354,6 +357,20 @@ int bgtm_set_flt_site(bgtm_t *bm, const char *expr)
 	return 0;
 }
 
+int bgtm_add_allele(bgtm_t *bm, const char *al)
+{
+	int ret;
+	if (bm->n_al == bm->m_al) {
+		int oldm = bm->m_al;
+		bm->m_al = bm->m_al? bm->m_al<<1 : 4;
+		bm->al = (bgt_allele_t*)realloc(bm->al, bm->m_al * sizeof(bgt_allele_t));
+		memset(bm->al + oldm, 0, (bm->m_al - oldm) * sizeof(bgt_allele_t));
+	}
+	ret = bgt_al_parse(al, &bm->al[bm->n_al]);
+	if (ret == 0) ++bm->n_al;
+	return ret;
+}
+
 /*** prepare for the output ***/
 
 void bgtm_prepare(bgtm_t *bm)
@@ -363,6 +380,8 @@ void bgtm_prepare(bgtm_t *bm)
 	bcf_hdr_t *h0;
 
 	if (bm->n_bgt == 0) return;
+
+	// prepare group and sample_idx
 	for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
 		bgt_prepare(bm->bgt[i]);
 		bm->n_out += bm->bgt[i]->n_out;
@@ -376,6 +395,7 @@ void bgtm_prepare(bgtm_t *bm)
 		}
 	}
 
+	// prepare header
 	h0 = bm->bgt[0]->f->h0; // FIXME: test if headers are consistent
 	kputs("##fileformat=VCFv4.1\n", &h);
 	kputs("##INFO=<ID=AC,Number=A,Type=String,Description=\"Count of alternate alleles\">\n", &h);
@@ -411,8 +431,32 @@ void bgtm_prepare(bgtm_t *bm)
 	bm->h_out = bcf_hdr_init();
 	bm->h_out->l_text = h.l + 1, bm->h_out->m_text = h.m, bm->h_out->text = h.s;
 	bcf_hdr_parse(bm->h_out);
+
+	// prepare the haplotype arrays
 	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_out<<1);
 	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_out<<1);
+
+	// set al[].rid
+	for (i = 0; i < bm->n_al; ++i)
+		bm->al[i].rid = bcf_name2id(bm->h_out, bm->al[i].chr.s);
+
+	// set region if necessary
+	if (bm->n_al && bm->bgt[0]->itr == 0) {
+		char *reg;
+		int min_pos = INT_MAX, max_pos = INT_MIN;
+		for (i = 0; i < bm->n_al; ++i) {
+			bgt_allele_t *a = &bm->al[i];
+			min_pos = min_pos < a->pos? min_pos : a->pos;
+			max_pos = max_pos < a->pos? max_pos : a->pos;
+			if (a->rid < 0 || a->rid != bm->al[i].rid) break;
+		}
+		if (i == bm->n_al) {
+			reg = (char*)alloca(strlen(bm->al[0].chr.s) + 23);
+			sprintf(reg, "%s:%d-%d", bm->al[0].chr.s, min_pos+1, max_pos+1);
+			bgtm_set_region(bm, reg);
+		}
+	}
+
 }
 
 /*** read into BCF ***/

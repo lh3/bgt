@@ -9,6 +9,7 @@
 #define BGT_F_NO_GT     0x0002
 
 #define BGT_MAX_GROUPS  32
+#define BGT_MAX_ALLELES 64
 
 #define BGT_SET_ALL_SAMPLES (-1)
 
@@ -42,6 +43,12 @@ typedef struct {
 } bgt_info_t;
 
 typedef struct {
+	kstring_t chr;
+	char *al;
+	int rid, pos, rlen;
+} bgt_allele_t;
+
+typedef struct {
 	int n_bgt, n_out, n_groups, flag;
 	uint64_t *sample_idx;
 	uint32_t *group;
@@ -50,13 +57,10 @@ typedef struct {
 	kexpr_t *site_flt;
 	bcf_hdr_t *h_out;
 	uint8_t *a[2];
-} bgtm_t;
 
-typedef struct {
-	kstring_t chr;
-	char *al;
-	int rid, pos, rlen;
-} bgt_allele_t;
+	int n_al, m_al;
+	bgt_allele_t *al;
+} bgtm_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,6 +86,7 @@ int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_set_start(bgtm_t *bm, int64_t n);
 void bgtm_add_group_core(bgtm_t *bm, int n, char *const* samples, const char *expr);
 void bgtm_add_group(bgtm_t *bm, const char *expr);
+int bgtm_add_allele(bgtm_t *bm, const char *al);
 void bgtm_prepare(bgtm_t *bm);
 
 int bgtm_read(bgtm_t *bm, bcf1_t *b);

@@ -22,9 +22,8 @@ int main_view(int argc, char *argv[])
 	char modew[8], *reg = 0, *site_flt = 0;
 	void *bed = 0;
 	int n_groups = 0;
-	char *gexpr[BGT_MAX_GROUPS];
-	int n_a = 0, m_a = 0;
-	bgt_allele_t *a = 0;
+	char *gexpr[BGT_MAX_GROUPS], *al[BGT_MAX_ALLELES];
+	int n_alleles = 0;
 	bgt_file_t **files = 0;
 
 	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:S")) >= 0) {
@@ -39,34 +38,12 @@ int main_view(int argc, char *argv[])
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
-		else if (c == 's' && n_groups < BGT_MAX_GROUPS) {
-			gexpr[n_groups++] = optarg;
-		} else if (c == 'a') {
-			bgt_allele_t *p;
-			if (n_a == m_a) {
-				int old = m_a;
-				m_a = m_a? m_a<<1 : 2;
-				a = (bgt_allele_t*)realloc(a, m_a * sizeof(bgt_allele_t));
-				memset(a + old, 0, (m_a - old) * sizeof(bgt_allele_t));
-			}
-			p = &a[n_a++];
-			if (bgt_al_parse(optarg, p) < 0) {
-				fprintf(stderr, "[E::%s] failed to parse allele '%s'\n", __func__, optarg);
-				return 1; // FIXME: memory leak
-			}
-			if (n_a > 1 && strcmp(p->chr.s, a[0].chr.s) != 0) {
-				fprintf(stderr, "[E::%s] for now, -a doesn't support alleles on different CHROM. Abort!\n", __func__);
-				return 1; // FIXME: memory leak
-			}
-		}
+		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
+		else if (c == 'a' && n_alleles < BGT_MAX_ALLELES) al[n_alleles++] = optarg;
 	}
 	if (seekn < 0) seekn = 0;
 	if (clevel > 9) clevel = 9;
 	if (n_groups > 1) multi_flag |= BGT_F_SET_AC;
-	if (reg && n_a > 0) {
-		fprintf(stderr, "[W::%s] -r and -a can't be specified at the same time. -r is igored.\n", __func__);
-		reg = 0;
-	}
 	if (argc - optind < 1) {
 		fprintf(stderr, "Usage: bgt %s [options] <bgt-prefix> [...]", argv[0]);
 		fputc('\n', stderr);
@@ -92,17 +69,6 @@ int main_view(int argc, char *argv[])
 		return 1;
 	}
 
-	// set reg
-	if (n_a > 0) {
-		int min = INT_MAX, max = INT_MIN;
-		for (i = 0; i < n_a; ++i) {
-			min = min < a[i].pos? min : a[i].pos;
-			max = max > a[i].pos? max : a[i].pos;
-		}
-		reg = (char*)malloc(strlen(a[0].chr.s) + 24);
-		sprintf(reg, "%s:%d-%d", a[0].chr.s, min+1, max+1);
-	}
-
 	n_files = argc - optind;
 	files = (bgt_file_t**)calloc(n_files, sizeof(bgt_file_t*));
 	for (i = 0; i < n_files; ++i) files[i] = bgt_open(argv[optind+i]);
@@ -113,15 +79,14 @@ int main_view(int argc, char *argv[])
 	if (reg) bgtm_set_region(bm, reg);
 	if (bed) bgtm_set_bed(bm, bed, excl);
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
+	for (i = 0; i < n_alleles; ++i)
+		bgtm_add_allele(bm, al[i]);
 	for (i = 0; i < n_groups; ++i)
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
 
-	if (n_a > 0) {
-		for (i = 0; i < n_a; ++i)
-			a[i].rid = bcf_name2id(bm->h_out, a[i].chr.s);
+	if (bm->n_al > 0)
 		match_cnt = (int*)calloc(bm->n_out>>1, sizeof(int));
-	}
 
 	if (!sample_only) {
 		strcpy(modew, "w");
@@ -133,11 +98,11 @@ int main_view(int argc, char *argv[])
 
 	b = bcf_init1();
 	while (bgtm_read(bm, b) >= 0 && n_read < n_rec) {
-		if (n_a > 0) {
+		if (bm->n_al > 0) {
 			int ret, is_ref;
-			for (i = 0; i < n_a; ++i)
-				if ((ret = bgt_al_test(b, &a[i])) != 0) break;
-			if (i == n_a) continue;
+			for (i = 0; i < bm->n_al; ++i)
+				if ((ret = bgt_al_test(b, &bm->al[i])) != 0) break;
+			if (i == bm->n_al) continue;
 			is_ref = (ret == 2);
 			for (i = 0; i < bm->n_out>>1; ++i) {
 				int g1 = bm->a[0][i<<1|0] | bm->a[1][i<<1|0]<<1;
@@ -151,9 +116,9 @@ int main_view(int argc, char *argv[])
 	}
 	bcf_destroy1(b);
 
-	if (sample_only && n_a > 0) {
+	if (sample_only && bm->n_al > 0) {
 		for (i = 0; i < bm->n_out>>1; ++i) {
-			if (match_cnt[i] == n_a) {
+			if (match_cnt[i] == bm->n_al) {
 				bgt_t *bgt = bm->bgt[bm->sample_idx[i<<1]>>32];
 				printf("%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i<<1]].name, (int)(bm->sample_idx[i<<1]>>32) + 1);
 			}
@@ -164,9 +129,6 @@ int main_view(int argc, char *argv[])
 	if (out) hts_close(out);
 	bgtm_reader_destroy(bm);
 	if (bed) bed_destroy(bed);
-	if (n_a) free(reg);
-	for (i = 0; i < n_a; ++i) free(a[i].chr.s);
-	free(a);
 	for (i = 0; i < n_files; ++i) bgt_close(files[i]);
 	free(files);
 	return 0;
