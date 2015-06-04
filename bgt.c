@@ -48,6 +48,8 @@ void bgt_close(bgt_file_t *bf)
  * Single BGT reading *
  **********************/
 
+/*** reader allocation/deallocation ***/
+
 bgt_t *bgt_reader_init(const bgt_file_t *bf)
 {
 	char *fn;
@@ -77,6 +79,8 @@ void bgt_reader_destroy(bgt_t *bgt)
 	bgzf_close(bgt->bcf);
 	free(bgt);
 }
+
+/*** set samples, regions, etc. ***/
 
 void bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr)
 {
@@ -129,6 +133,23 @@ void bgt_add_group(bgt_t *bgt, const char *expr)
 	} else bgt_add_group_core(bgt, 0, 0, expr);
 }
 
+int bgt_set_region(bgt_t *bgt, const char *reg)
+{
+	if (bgt->itr) bcf_itr_destroy(bgt->itr);
+	bgt->itr = bcf_itr_querys(bgt->f->idx, bgt->f->h0, reg);
+	bgt->b0->shared.l = 0; // mark b0 unread
+	return bgt->itr? 0 : -1;
+}
+
+int bgt_set_start(bgt_t *bgt, int64_t i)
+{
+	return bcf_seekn(bgt->bcf, bgt->f->idx, i);
+}
+
+void bgt_set_bed(bgt_t *bgt, const void *bed, int excl) { bgt->bed = bed, bgt->bed_excl = excl; }
+
+/*** prepare for the output ***/
+
 void bgt_prepare(bgt_t *bgt)
 {
 	int i, *t;
@@ -169,18 +190,7 @@ void bgt_prepare(bgt_t *bgt)
 	bgt->b0->shared.l = 0; // mark b0 unread
 }
 
-int bgt_set_region(bgt_t *bgt, const char *reg)
-{
-	if (bgt->itr) bcf_itr_destroy(bgt->itr);
-	bgt->itr = bcf_itr_querys(bgt->f->idx, bgt->f->h0, reg);
-	bgt->b0->shared.l = 0; // mark b0 unread
-	return bgt->itr? 0 : -1;
-}
-
-int bgt_set_start(bgt_t *bgt, int64_t i)
-{
-	return bcf_seekn(bgt->bcf, bgt->f->idx, i);
-}
+/*** read into BCF ***/
 
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
@@ -256,11 +266,11 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	return ret;
 }
 
-void bgt_set_bed(bgt_t *bgt, const void *bed, int excl) { bgt->bed = bed, bgt->bed_excl = excl; }
-
 /*********************
  * Multi BGT reading *
  *********************/
+
+/*** reader allocation/deallocation ***/
 
 bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const* bf)
 {
@@ -288,6 +298,8 @@ void bgtm_reader_destroy(bgtm_t *bm)
 	free(bm->r); free(bm->bgt); free(bm);
 }
 
+/*** set samples, regions, etc. ***/
+
 void bgtm_add_group_core(bgtm_t *bm, int n, char *const* samples, const char *expr)
 {
 	int i;
@@ -303,6 +315,46 @@ void bgtm_add_group(bgtm_t *bm, const char *expr)
 		bgt_add_group(bm->bgt[i], expr);
 	++bm->n_groups;
 }
+
+int bgtm_set_region(bgtm_t *bm, const char *reg)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_set_region(bm->bgt[i], reg);
+	return 0;
+}
+
+int bgtm_set_start(bgtm_t *bm, int64_t n)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_set_start(bm->bgt[i], n);
+	return 0;
+}
+
+void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i)
+		bgt_set_bed(bm->bgt[i], bed, excl);
+}
+
+void bgtm_set_flag(bgtm_t *bm, int flag) { bm->flag = flag; }
+
+int bgtm_set_flt_site(bgtm_t *bm, const char *expr)
+{
+	int err;
+	if (bm->site_flt) ke_destroy(bm->site_flt);
+	bm->site_flt = ke_parse(expr, &err);
+	if (err != 0) {
+		if (bm->site_flt) ke_destroy(bm->site_flt);
+		bm->site_flt = 0;
+		return err;
+	}
+	return 0;
+}
+
+/*** prepare for the output ***/
 
 void bgtm_prepare(bgtm_t *bm)
 {
@@ -363,34 +415,7 @@ void bgtm_prepare(bgtm_t *bm)
 	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_out<<1);
 }
 
-int bgtm_set_region(bgtm_t *bm, const char *reg)
-{
-	int i;
-	for (i = 0; i < bm->n_bgt; ++i)
-		bgt_set_region(bm->bgt[i], reg);
-	return 0;
-}
-
-int bgtm_set_start(bgtm_t *bm, int64_t n)
-{
-	int i;
-	for (i = 0; i < bm->n_bgt; ++i)
-		bgt_set_start(bm->bgt[i], n);
-	return 0;
-}
-
-int bgtm_set_flt_site(bgtm_t *bm, const char *expr)
-{
-	int err;
-	if (bm->site_flt) ke_destroy(bm->site_flt);
-	bm->site_flt = ke_parse(expr, &err);
-	if (err != 0) {
-		if (bm->site_flt) ke_destroy(bm->site_flt);
-		bm->site_flt = 0;
-		return err;
-	}
-	return 0;
-}
+/*** read into BCF ***/
 
 static inline char *gen_group_key(char key[5], char nc, int g)
 {
@@ -535,15 +560,6 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 		bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
 	return ret;
 }
-
-void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl)
-{
-	int i;
-	for (i = 0; i < bm->n_bgt; ++i)
-		bgt_set_bed(bm->bgt[i], bed, excl);
-}
-
-void bgtm_set_flag(bgtm_t *bm, int flag) { bm->flag = flag; }
 
 /******************
  * Allele parsing *
