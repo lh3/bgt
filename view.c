@@ -25,7 +25,7 @@ int main_view(int argc, char *argv[])
 	int n_alleles = 0;
 	bgt_file_t **files = 0;
 
-	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:S")) >= 0) {
+	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:SH")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -34,6 +34,7 @@ int main_view(int argc, char *argv[])
 		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
 		else if (c == 'S') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_AL, sample_only = 1;
+		else if (c == 'H') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_HAP, sample_only = 1;
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
@@ -100,11 +101,22 @@ int main_view(int argc, char *argv[])
 	bcf_destroy1(b);
 
 	if (sample_only && bm->n_al > 0) {
-		for (i = 0; i < bm->n_out>>1; ++i) {
-			if (bm->alcnt[i] == bm->n_al) {
-				bgt_t *bgt = bm->bgt[bm->sample_idx[i<<1]>>32];
-				printf("%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i<<1]].name, (int)(bm->sample_idx[i<<1]>>32) + 1);
+		if (bm->flag & BGT_F_CNT_AL) {
+			for (i = 0; i < bm->n_out>>1; ++i) {
+				if (bm->alcnt[i] == bm->n_al) {
+					bgt_t *bgt = bm->bgt[bm->sample_idx[i<<1]>>32];
+					printf("%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i<<1]].name, (int)(bm->sample_idx[i<<1]>>32) + 1);
+				}
 			}
+		}
+		if (bm->flag & BGT_F_CNT_HAP) {
+			bgt_hapcnt_t *hc;
+			int n_hap;
+			char *s;
+			hc = bgtm_hapcnt(bm, &n_hap);
+			s = bgtm_hapcnt_print_destroy(bm, n_hap, hc);
+			fputs(s, stdout);
+			free(s);
 		}
 	}
 

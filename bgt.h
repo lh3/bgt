@@ -8,6 +8,7 @@
 #define BGT_F_SET_AC    0x0001
 #define BGT_F_NO_GT     0x0002
 #define BGT_F_CNT_AL    0x0004
+#define BGT_F_CNT_HAP   0x0008
 
 #define BGT_MAX_GROUPS  32
 #define BGT_MAX_ALLELES 64
@@ -50,6 +51,11 @@ typedef struct {
 } bgt_allele_t;
 
 typedef struct {
+	uint64_t hap;
+	int *cnt;
+} bgt_hapcnt_t;
+
+typedef struct {
 	int n_bgt, n_out, n_groups, flag;
 	uint64_t *sample_idx;
 	uint32_t *group;
@@ -59,9 +65,10 @@ typedef struct {
 	bcf_hdr_t *h_out;
 	uint8_t *a[2];
 
-	int n_al, m_al;
-	bgt_allele_t *al;
+	int n_al, m_al, n_aal;
+	bgt_allele_t *al, *aal;
 	int *alcnt;
+	uint64_t *hap;
 } bgtm_t;
 
 #ifdef __cplusplus
@@ -93,8 +100,12 @@ void bgtm_prepare(bgtm_t *bm);
 
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
+bgt_hapcnt_t *bgtm_hapcnt(const bgtm_t *bm, int *n_hap);
+char *bgtm_hapcnt_print_destroy(const bgtm_t *bm, int n_hap, bgt_hapcnt_t *hc);
+
 int bgt_al_parse(const char *al, bgt_allele_t *a);
 int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a);
+void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a);
 
 #ifdef __cplusplus
 }

@@ -289,13 +289,18 @@ bgtm_t *bgtm_reader_init(int n_files, bgt_file_t *const* bf)
 void bgtm_reader_destroy(bgtm_t *bm)
 {
 	int i;
+	free(bm->hap);
 	free(bm->alcnt);
 	if (bm->site_flt) ke_destroy(bm->site_flt);
 	free(bm->group);
 	free(bm->sample_idx);
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
 	free(bm->a[0]); free(bm->a[1]);
-	for (i = 0; i < bm->n_al; ++i) free(bm->al[i].chr.s);
+	for (i = 0; i < bm->n_al; ++i) {
+		if (bm->aal) free(bm->aal[i].chr.s);
+		free(bm->al[i].chr.s);
+	}
+	free(bm->aal);
 	free(bm->al);
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_reader_destroy(bm->bgt[i]);
@@ -458,8 +463,14 @@ void bgtm_prepare(bgtm_t *bm)
 		}
 	}
 
-	if (bm->n_al > 0 && (bm->flag&BGT_F_CNT_AL))
-		bm->alcnt = (int*)calloc(bm->n_out>>1, sizeof(int));
+	if (bm->n_al > 0) {
+		if (bm->flag&BGT_F_CNT_AL)
+			bm->alcnt = (int*)calloc(bm->n_out, sizeof(int));
+		if (bm->flag&BGT_F_CNT_HAP) {
+			bm->hap = (uint64_t*)calloc(bm->n_out<<1, 8);
+			bm->aal = (bgt_allele_t*)calloc(bm->n_al, sizeof(bgt_allele_t));
+		}
+	}
 }
 
 /*** read into BCF ***/
@@ -586,20 +597,30 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		}
 		off += bgt->n_out<<1;
 	}
-	assert(off == bm->n_out<<1);
+	// find samples having a set of alleles, or do haplotype counting
 	if (bm->n_al > 0) {
 		int ret;
+		// test if the current record matches an allele
 		for (i = 0; i < bm->n_al; ++i) // NOTE: this is a quadratic algorithm; could be better
 			if ((ret = bgt_al_test(b, &bm->al[i])) != 0) break;
 		if (i == bm->n_al) return 1; // not matching any requested alleles
-		if (i < bm->n_al && (bm->flag&BGT_F_CNT_AL) && bm->alcnt) {
+		// +1 to samples having the allele
+		if ((bm->flag&BGT_F_CNT_AL) && bm->alcnt) {
 			int is_ref = (ret == 2);
-			for (i = 0; i < bm->n_out>>1; ++i) {
+			for (i = 0; i < bm->n_out; ++i) {
 				int g1 = bm->a[0][i<<1|0] | bm->a[1][i<<1|0]<<1;
 				int g2 = bm->a[0][i<<1|1] | bm->a[1][i<<1|1]<<1;
 				if (is_ref) bm->alcnt[i] += (g1 == 0 || g2 == 0);
 				else bm->alcnt[i] += (g1 == 1 || g2 == 1);
 			}
+		}
+		// generate haplotype
+		if ((bm->flag&BGT_F_CNT_HAP) && bm->hap) {
+			for (i = 0; i < bm->n_out<<1; ++i) {
+				int h = bm->a[0][i] | bm->a[1][i]<<1;
+				if (h == 1) bm->hap[i] |= 1ULL<<bm->n_aal;
+			}
+			bgt_al_from_bcf(bm->h_out, b, &bm->aal[bm->n_aal++]);
 		}
 	}
 	// fill AC/AN/etc and test site_flt
@@ -623,11 +644,72 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	return ret;
 }
 
+/**********************
+ * Haplotype counting *
+ **********************/
+
+KHASH_MAP_INIT_INT64(hc, int) // WARNING: the default 64-bit hash function is bad
+
+bgt_hapcnt_t *bgtm_hapcnt(const bgtm_t *bm, int *n_hap)
+{
+	int i, j, absent, n;
+	khint_t k;
+	khash_t(hc) *h;
+	bgt_hapcnt_t *hc;
+	if (bm->hap == 0 || bm->n_out == 0) return 0;
+	h = kh_init(hc);
+	for (i = 0; i < bm->n_out<<1; ++i) {
+		k = kh_put(hc, h, bm->hap[i], &absent);
+		if (absent) kh_val(h, k) = kh_size(h) - 1;
+	}
+	n = kh_size(h);
+	hc = (bgt_hapcnt_t*)calloc(n, sizeof(bgt_hapcnt_t));
+	for (i = 0; i < n; ++i)
+		hc[i].cnt = (int*)calloc(bm->n_groups, sizeof(int));
+	for (k = 0; k < kh_end(h); ++k)
+		if (kh_exist(h, k))
+			hc[kh_val(h, k)].hap = kh_key(h, k);
+	for (i = 0; i < bm->n_out<<1; ++i) {
+		int t;
+		k = kh_get(hc, h, bm->hap[i]);
+		t = kh_val(h, k);
+		for (j = 0; j < bm->n_groups; ++j)
+			if (bm->group[i>>1] & 1U<<j)
+				++hc[t].cnt[j];
+	}
+	kh_destroy(hc, h);
+	*n_hap = n;
+	return hc;
+}
+
+char *bgtm_hapcnt_print_destroy(const bgtm_t *bm, int n_hap, bgt_hapcnt_t *hc)
+{
+	int i, j;
+	kstring_t s = {0,0,0};
+	ksprintf(&s, "NA\t%d\n", bm->n_aal);
+	for (i = 0; i < bm->n_aal; ++i) {
+		bgt_allele_t *a = &bm->aal[i];
+		ksprintf(&s, "AA\t%s:%d:%d:%s\n", a->chr.s, a->pos+1, a->rlen, a->al);
+	}
+	ksprintf(&s, "NH\t%d\t%d\n", n_hap, bm->n_groups);
+	for (i = 0; i < n_hap; ++i) {
+		kputs("HC\t", &s);
+		for (j = 0; j < bm->n_aal; ++j)
+			kputc('0' + (hc[i].hap>>j&1), &s);
+		for (j = 0; j < bm->n_groups; ++j)
+			ksprintf(&s, "\t%d", hc[i].cnt[j]);
+		kputc('\n', &s);
+		free(hc[i].cnt);
+	}
+	free(hc);
+	return s.s;
+}
+
 /******************
  * Allele parsing *
  ******************/
 
-int bgt_al_parse(const char *al, bgt_allele_t *a)
+int bgt_al_parse(const char *al, bgt_allele_t *a) // TODO: add bgt_al_atomize()
 {
 	char *p = (char*)al, *ref = 0, *alt = 0;
 	int sep = ':', off, tmp, i;
@@ -674,7 +756,7 @@ int bgt_al_parse(const char *al, bgt_allele_t *a)
 	return 0;
 }
 
-int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUST be set
+int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUST be set; FIXME: NOT WORKING FOR INDELS!!! Need minize
 {
 	int l_ref, l_alt, l_al;
 	char *ref, *alt;
@@ -684,4 +766,20 @@ int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUS
 	if (l_al == l_alt && strncmp(a->al, alt, l_alt) == 0) return 1;
 	if (l_al == l_ref && strncmp(a->al, ref, l_ref) == 0) return 2;
 	return 0;
+}
+
+void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a)
+{
+	char *ref, *alt;
+	const char *chr;
+	int l_ref, l_alt, min_l;
+	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
+	min_l = l_ref < l_alt? l_ref : l_alt;
+	a->rid = b->rid, a->pos = b->pos, a->rlen = b->rlen;
+	a->chr.l = 0;
+	chr = h->id[BCF_DT_CTG][b->rid].key;
+	kputs(chr, &a->chr);
+	kputc(0, &a->chr);
+	kputsn(alt, l_alt, &a->chr);
+	a->al = a->chr.s + strlen(chr) + 1;
 }
