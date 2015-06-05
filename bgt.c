@@ -466,10 +466,9 @@ void bgtm_prepare(bgtm_t *bm)
 	if (bm->n_al > 0) {
 		if (bm->flag&BGT_F_CNT_AL)
 			bm->alcnt = (int*)calloc(bm->n_out, sizeof(int));
-		if (bm->flag&BGT_F_CNT_HAP) {
+		if (bm->flag&BGT_F_CNT_HAP)
 			bm->hap = (uint64_t*)calloc(bm->n_out<<1, 8);
-			bm->aal = (bgt_allele_t*)calloc(bm->n_al, sizeof(bgt_allele_t));
-		}
+		bm->aal = (bgt_allele_t*)calloc(bm->n_al, sizeof(bgt_allele_t));
 	}
 }
 
@@ -616,12 +615,10 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		}
 		// generate haplotype
 		if ((bm->flag&BGT_F_CNT_HAP) && bm->hap) {
-			for (i = 0; i < bm->n_out<<1; ++i) {
-				int h = bm->a[0][i] | bm->a[1][i]<<1;
-				if (h == 1) bm->hap[i] |= 1ULL<<bm->n_aal;
-			}
-			bgt_al_from_bcf(bm->h_out, b, &bm->aal[bm->n_aal++]);
+			for (i = 0; i < bm->n_out<<1; ++i)
+				if (bm->a[0][i] == 1 && bm->a[1][i] == 0) bm->hap[i] |= 1ULL<<bm->n_aal;
 		}
+		bgt_al_from_bcf(bm->h_out, b, &bm->aal[bm->n_aal++]);
 	}
 	// fill AC/AN/etc and test site_flt
 	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_groups > 1) {
@@ -702,6 +699,19 @@ char *bgtm_hapcnt_print_destroy(const bgtm_t *bm, int n_hap, bgt_hapcnt_t *hc)
 		free(hc[i].cnt);
 	}
 	free(hc);
+	return s.s;
+}
+
+char *bgtm_alcnt_print(const bgtm_t *bm)
+{
+	int i;
+	kstring_t s = {0,0,0};
+	for (i = 0; i < bm->n_out; ++i) {
+		if (bm->alcnt[i] == bm->n_aal) {
+			bgt_t *bgt = bm->bgt[bm->sample_idx[i]>>32];
+			ksprintf(&s, "SP\t%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i]].name, (int)(bm->sample_idx[i]>>32) + 1);
+		}
+	}
 	return s.s;
 }
 

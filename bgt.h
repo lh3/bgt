@@ -102,6 +102,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
 bgt_hapcnt_t *bgtm_hapcnt(const bgtm_t *bm, int *n_hap);
 char *bgtm_hapcnt_print_destroy(const bgtm_t *bm, int n_hap, bgt_hapcnt_t *hc);
+char *bgtm_alcnt_print(const bgtm_t *bm);
 
 int bgt_al_parse(const char *al, bgt_allele_t *a);
 int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a);

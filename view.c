@@ -102,12 +102,10 @@ int main_view(int argc, char *argv[])
 
 	if (sample_only && bm->n_al > 0) {
 		if (bm->flag & BGT_F_CNT_AL) {
-			for (i = 0; i < bm->n_out>>1; ++i) {
-				if (bm->alcnt[i] == bm->n_al) {
-					bgt_t *bgt = bm->bgt[bm->sample_idx[i<<1]>>32];
-					printf("%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i<<1]].name, (int)(bm->sample_idx[i<<1]>>32) + 1);
-				}
-			}
+			char *s;
+			s = bgtm_alcnt_print(bm);
+			fputs(s, stdout);
+			free(s);
 		}
 		if (bm->flag & BGT_F_CNT_HAP) {
 			bgt_hapcnt_t *hc;
