@@ -128,18 +128,18 @@ int main_view(int argc, char *argv[])
 	bcf_destroy1(b);
 
 	if (sample_only && bm->n_al > 0) {
-		if (bm->flag & BGT_F_CNT_AL) {
-			char *s;
-			s = bgtm_alcnt_print(bm);
-			fputs(s, stdout);
-			free(s);
-		}
 		if (bm->flag & BGT_F_CNT_HAP) {
 			bgt_hapcnt_t *hc;
 			int n_hap;
 			char *s;
 			hc = bgtm_hapcnt(bm, &n_hap);
 			s = bgtm_hapcnt_print_destroy(bm, n_hap, hc);
+			fputs(s, stdout);
+			free(s);
+		}
+		if (bm->flag & BGT_F_CNT_AL) {
+			char *s;
+			s = bgtm_alcnt_print(bm);
 			fputs(s, stdout);
 			free(s);
 		}
