@@ -21,8 +21,8 @@ int main_view(int argc, char *argv[])
 	char modew[8], *reg = 0, *site_flt = 0;
 	void *bed = 0;
 	int n_groups = 0;
-	char *gexpr[BGT_MAX_GROUPS], *al[BGT_MAX_ALLELES];
-	int n_alleles = 0;
+	char *gexpr[BGT_MAX_GROUPS], **al = 0;
+	int n_al = 0;
 	bgt_file_t **files = 0;
 
 	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SH")) >= 0) {
@@ -40,7 +40,14 @@ int main_view(int argc, char *argv[])
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
-		else if (c == 'a' && n_alleles < BGT_MAX_ALLELES) al[n_alleles++] = optarg;
+		else if (c == 'a') {
+			al = hts_readlines(optarg, &n_al);
+			if (n_al > BGT_MAX_ALLELES) {
+				for (i = BGT_MAX_ALLELES; i < n_al; ++i) free(al[i]);
+				n_al = BGT_MAX_ALLELES;
+				fprintf(stderr, "[W::%s] only the first %d alleles are parsed\n", __func__, BGT_MAX_ALLELES);
+			}
+		}
 	}
 	if (seekn < 0) seekn = 0;
 	if (clevel > 9) clevel = 9;
@@ -51,14 +58,14 @@ int main_view(int argc, char *argv[])
 		fputc('\n', stderr);
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  Sample selection:\n");
-		fprintf(stderr, "    -s EXPR      list of samples (see Notes below) [all]\n");
+		fprintf(stderr, "    -s EXPR      samples list (,sample1,sample2 or a file or expr; see Notes below) [all]\n");
 		fprintf(stderr, "  Site selection:\n");
 		fprintf(stderr, "    -r STR       region [all]\n");
 		fprintf(stderr, "    -B FILE      extract variants overlapping BED FILE [null]\n");
 		fprintf(stderr, "    -e           exclude variants overlapping BED FILE (effective with -B)\n");
 		fprintf(stderr, "    -i INT       process from the INT-th record (1-based) [null]\n");
 		fprintf(stderr, "    -n INT       process at most INT records [null]\n");
-		fprintf(stderr, "    -a STR       allele in the format of chr:1basedPos:refLen:seq [null]\n");
+		fprintf(stderr, "    -a STR       alleles list chr:1basedPos:refLen:seq (,allele1,allele2 or a file) [null]\n");
 		fprintf(stderr, "    -f STR       frequency filters [null]\n");
 		fprintf(stderr, "  VCF output:\n");
 		fprintf(stderr, "    -b           BCF output (effective without -S/-H)\n");
@@ -71,7 +78,7 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "    -H           count of haplotypes with a set of alleles (with -a)\n");
 		fprintf(stderr, "Notes:\n");
 		fprintf(stderr, "  For option -s, EXPR can be one of:\n");
-		fprintf(stderr, "    1) comma-delimited sample list following a colon. e.g. -s:NA12878,NA12044\n");
+		fprintf(stderr, "    1) comma-delimited sample list following a colon/comma. e.g. -s,NA12878,NA12044\n");
 		fprintf(stderr, "    2) space-delimited file with the first column giving a sample name. e.g. -s samples.txt\n");
 		fprintf(stderr, "    3) expression if .spl file contains metadata. e.g.: -s\"gender=='M'&&population!='CEU'\"\n");
 		fprintf(stderr, "  If multiple -s is specified, the AC/AN of the first group will be written to VCF INFO AC1/AN1,\n");
@@ -79,7 +86,7 @@ int main_view(int argc, char *argv[])
 		return 1;
 	}
 
-	if ((multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) && n_alleles == 0) {
+	if ((multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) && n_al == 0) {
 		fprintf(stderr, "[E::%s] at least one -a must be specified when -S/-H is in use.\n", __func__);
 		return 1;
 	}
@@ -94,8 +101,13 @@ int main_view(int argc, char *argv[])
 	if (reg) bgtm_set_region(bm, reg);
 	if (bed) bgtm_set_bed(bm, bed, excl);
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
-	for (i = 0; i < n_alleles; ++i)
+	for (i = 0; i < n_al; ++i)
 		bgtm_add_allele(bm, al[i]);
+	if (multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) {
+		for (i = 1; i < bm->n_al; ++i)
+			if (strcmp(bm->al[0].chr.s, bm->al[i].chr.s) != 0)
+				fprintf(stderr, "[W::%s] alleles on different chr; unexpected errors may happen!\n", __func__);
+	}
 	for (i = 0; i < n_groups; ++i)
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
@@ -138,6 +150,8 @@ int main_view(int argc, char *argv[])
 	if (bed) bed_destroy(bed);
 	for (i = 0; i < n_files; ++i) bgt_close(files[i]);
 	free(files);
+	for (i = 0; i < n_al; ++i) free(al[i]);
+	free(al);
 	return 0;
 }
 

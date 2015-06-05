@@ -122,7 +122,7 @@ char **hts_readlines(const char *fn, int *_n)
 		gzclose(fp);
 		s = (char**)realloc(s, n * sizeof(void*));
 		free(str.s);
-	} else if (*fn == ':') { // read from string
+	} else if (*fn == ':' || *fn == ',') { // read from string
 		const char *q, *p;
 		for (q = p = fn + 1;; ++p)
 			if (*p == ',' || *p == 0) {
