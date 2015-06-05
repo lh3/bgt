@@ -71,8 +71,8 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "    -b           BCF output (effective without -S/-H)\n");
 		fprintf(stderr, "    -l INT       compression level for BCF [default]\n");
 		fprintf(stderr, "    -u           equivalent to -bl0 (overriding -b and -l)\n");
-		fprintf(stderr, "    -G           don't output sample genotype\n");
-		fprintf(stderr, "    -A           write AC/AN to the INFO field\n");
+		fprintf(stderr, "    -G           don't output sample genotypes\n");
+		fprintf(stderr, "    -A           write AC/AN to the INFO field (auto applied with -f or multipl -s)\n");
 		fprintf(stderr, "  Non-VCF output:\n");
 		fprintf(stderr, "    -S           show samples with a set of alleles (with -a)\n");
 		fprintf(stderr, "    -H           count of haplotypes with a set of alleles (with -a)\n");
