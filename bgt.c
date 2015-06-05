@@ -766,13 +766,16 @@ int bgt_al_parse(const char *al, bgt_allele_t *a) // TODO: add bgt_al_atomize()
 	return 0;
 }
 
-int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUST be set; FIXME: NOT WORKING FOR INDELS!!! Need minize
+int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUST be set
 {
-	int l_ref, l_alt, l_al;
+	int l_ref, l_alt, l_al, shift;
 	char *ref, *alt;
-	if (b->rid != a->rid || b->pos != a->pos || b->rlen != a->rlen) return 0;
-	l_al = strlen(a->al);
+	if (b->rid != a->rid) return 0;
 	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
+	for (shift = 0; shift < l_ref && shift < l_alt && ref[shift] == alt[shift]; ++shift);
+	l_ref -= shift, l_alt -= shift, ref += shift, alt += shift;
+	if (b->pos + shift != a->pos || b->rlen - shift != a->rlen) return 0;
+	l_al = strlen(a->al);
 	if (l_al == l_alt && strncmp(a->al, alt, l_alt) == 0) return 1;
 	if (l_al == l_ref && strncmp(a->al, ref, l_ref) == 0) return 2;
 	return 0;

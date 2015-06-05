@@ -13,7 +13,7 @@ char **hts_readlines(const char *fn, int *_n);
 
 int main_view(int argc, char *argv[])
 {
-	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, sample_only = 0;
+	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, sample_only = 0, u_set = 0;
 	long seekn = -1, n_rec = LONG_MAX, n_read = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
@@ -25,11 +25,12 @@ int main_view(int argc, char *argv[])
 	int n_alleles = 0;
 	bgt_file_t **files = 0;
 
-	while ((c = getopt(argc, argv, "bs:r:l:AGB:ef:g:a:i:n:SH")) >= 0) {
+	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SH")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
 		else if (c == 'e') excl = 1;
+		else if (c == 'u') u_set = 1;
 		else if (c == 'B') bed = bed_read(optarg);
 		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
@@ -43,22 +44,31 @@ int main_view(int argc, char *argv[])
 	}
 	if (seekn < 0) seekn = 0;
 	if (clevel > 9) clevel = 9;
+	if (u_set) clevel = 0, out_bcf = 1;
 	if (n_groups > 1) multi_flag |= BGT_F_SET_AC;
 	if (argc - optind < 1) {
 		fprintf(stderr, "Usage: bgt %s [options] <bgt-prefix> [...]", argv[0]);
 		fputc('\n', stderr);
 		fprintf(stderr, "Options:\n");
-		fprintf(stderr, "  -b           BCF output\n");
-		fprintf(stderr, "  -r STR       region [all]\n");
-		fprintf(stderr, "  -i INT       process from the INT-th record (1-based) [null]\n");
-		fprintf(stderr, "  -n INT       process at most INT records [null]\n");
-		fprintf(stderr, "  -l INT       compression level for BCF [default]\n");
-		fprintf(stderr, "  -B FILE      extract variants overlapping BED FILE [null]\n");
-		fprintf(stderr, "  -e           exclude variants overlapping BED FILE (effective with -B)\n");
-		fprintf(stderr, "  -A           write AC/AN to the INFO field\n");
-		fprintf(stderr, "  -G           don't output sample genotype\n");
-		fprintf(stderr, "  -f STR       frequency filters [null]\n");
-		fprintf(stderr, "  -s EXPR      list of samples (see Notes below) [all]\n");
+		fprintf(stderr, "  Sample selection:\n");
+		fprintf(stderr, "    -s EXPR      list of samples (see Notes below) [all]\n");
+		fprintf(stderr, "  Site selection:\n");
+		fprintf(stderr, "    -r STR       region [all]\n");
+		fprintf(stderr, "    -B FILE      extract variants overlapping BED FILE [null]\n");
+		fprintf(stderr, "    -e           exclude variants overlapping BED FILE (effective with -B)\n");
+		fprintf(stderr, "    -i INT       process from the INT-th record (1-based) [null]\n");
+		fprintf(stderr, "    -n INT       process at most INT records [null]\n");
+		fprintf(stderr, "    -a STR       allele in the format of chr:1basedPos:refLen:seq [null]\n");
+		fprintf(stderr, "    -f STR       frequency filters [null]\n");
+		fprintf(stderr, "  VCF output:\n");
+		fprintf(stderr, "    -b           BCF output (effective without -S/-H)\n");
+		fprintf(stderr, "    -l INT       compression level for BCF [default]\n");
+		fprintf(stderr, "    -u           equivalent to -bl0 (overriding -b and -l)\n");
+		fprintf(stderr, "    -G           don't output sample genotype\n");
+		fprintf(stderr, "    -A           write AC/AN to the INFO field\n");
+		fprintf(stderr, "  Non-VCF output:\n");
+		fprintf(stderr, "    -S           show samples with a set of alleles (with -a)\n");
+		fprintf(stderr, "    -H           count of haplotypes with a set of alleles (with -a)\n");
 		fprintf(stderr, "Notes:\n");
 		fprintf(stderr, "  For option -s, EXPR can be one of:\n");
 		fprintf(stderr, "    1) comma-delimited sample list following a colon. e.g. -s:NA12878,NA12044\n");
