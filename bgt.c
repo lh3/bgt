@@ -394,11 +394,17 @@ void bgtm_prepare(bgtm_t *bm)
 	}
 	bm->group = (uint32_t*)realloc(bm->group, bm->n_out * 4);
 	bm->sample_idx = (uint64_t*)realloc(bm->sample_idx, bm->n_out * 8);
-	for (i = m = 0; i < bm->n_bgt; ++i) {
-		for (j = 0; j < bm->bgt[i]->n_out; ++j) {
-			bm->sample_idx[m] = (uint64_t)i<<32 | bm->bgt[i]->out[j];
-			bm->group[m++] = bm->bgt[i]->group[j];
+	if (bm->n_groups > 0) {
+		for (i = m = 0; i < bm->n_bgt; ++i) {
+			for (j = 0; j < bm->bgt[i]->n_out; ++j) {
+				bm->sample_idx[m] = (uint64_t)i<<32 | bm->bgt[i]->out[j];
+				bm->group[m++] = bm->bgt[i]->group[j];
+			}
 		}
+	} else {
+		for (i = 0; i < bm->n_out; ++i)
+			bm->group[i] = 1;
+		bm->n_groups = 1;
 	}
 
 	// prepare header

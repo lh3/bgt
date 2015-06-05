@@ -79,6 +79,11 @@ int main_view(int argc, char *argv[])
 		return 1;
 	}
 
+	if ((multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) && n_alleles == 0) {
+		fprintf(stderr, "[E::%s] at least one -a must be specified when -S/-H is in use.\n", __func__);
+		return 1;
+	}
+
 	n_files = argc - optind;
 	files = (bgt_file_t**)calloc(n_files, sizeof(bgt_file_t*));
 	for (i = 0; i < n_files; ++i) files[i] = bgt_open(argv[optind+i]);
