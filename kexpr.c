@@ -223,6 +223,7 @@ static ke1_t ke_read_token(char *p, char **r, int *err, int last_is_val) // it d
 			*r = q + 1;
 		} else if (*p == '=' && p[1] == '=') e.op = KEO_EQ, e.f.builtin = ke_op_KEO_EQ, e.n_args = 2, *r = q + 2;
 		else if (*p == '!' && p[1] == '=') e.op = KEO_NE, e.f.builtin = ke_op_KEO_NE, e.n_args = 2, *r = q + 2;
+		else if (*p == '<' && p[1] == '>') e.op = KEO_NE, e.f.builtin = ke_op_KEO_NE, e.n_args = 2, *r = q + 2;
 		else if (*p == '>' && p[1] == '=') e.op = KEO_GE, e.f.builtin = ke_op_KEO_GE, e.n_args = 2, *r = q + 2;
 		else if (*p == '<' && p[1] == '=') e.op = KEO_LE, e.f.builtin = ke_op_KEO_LE, e.n_args = 2, *r = q + 2;
 		else if (*p == '>' && p[1] == '>') e.op = KEO_RSH, e.f.builtin = ke_op_KEO_RSH, e.n_args = 2, *r = q + 2;
