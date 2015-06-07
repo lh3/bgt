@@ -303,6 +303,10 @@ void bgtm_reader_destroy(bgtm_t *bm)
 	}
 	free(bm->aal);
 	free(bm->al);
+	for (i = 0; i < bm->n_fields; ++i)
+		ke_destroy(bm->fields[i]);
+	free(bm->fields);
+	free(bm->tbl_line.s);
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_reader_destroy(bm->bgt[i]);
 	free(bm->r); free(bm->bgt); free(bm);
@@ -376,6 +380,54 @@ int bgtm_add_allele(bgtm_t *bm, const char *al)
 	ret = bgt_al_parse(al, &bm->al[bm->n_al]);
 	if (ret == 0) ++bm->n_al;
 	return ret;
+}
+
+kexpr_t **bgt_parse_fields(const char *str, int *_n)
+{
+	int m = 0, n = 0, n_par = 0, i;
+	char **s = 0;
+	const char *q, *p;
+	kexpr_t **e = 0;
+	*_n = 0;
+	for (q = p = str;; ++p) {
+		if (*p == '(') ++n_par;
+		else if (*p == ')') --n_par;
+		else if (*p == 0 || (*p == ',' && n_par == 0)) {
+			if (m == n) {
+				m = m? m<<1 : 16;
+				s = (char**)realloc(s, m * sizeof(void*));
+			}
+			s[n] = (char*)calloc(p - q + 1, 1);
+			strncpy(s[n++], q, p - q);
+			q = p + 1;
+			if (*p == 0) break;
+		}
+	}
+	if (n_par == 0) {
+		e = (kexpr_t**)calloc(n, sizeof(kexpr_t*));
+		for (i = m = 0; i < n; ++i) {
+			int err, j;
+			e[i] = ke_parse(s[i], &err);
+			if (err) {
+				for (j = 0; j <= i; ++j)
+					ke_destroy(e[j]);
+				break;
+			}
+		}
+		if (i < n) {
+			free(e);
+			e = 0;
+		} else *_n = n;
+	}
+	for (i = 0; i < n; ++i) free(s[i]);
+	free(s);
+	return e;
+}
+
+int bgtm_set_table(bgtm_t *bm, const char *fmt)
+{
+	bm->fields = bgt_parse_fields(fmt, &bm->n_fields);
+	return bm->fields == 0? -1 : 0;
 }
 
 /*** prepare for the output ***/
@@ -489,17 +541,23 @@ static inline char *gen_group_key(char key[5], char nc, int g)
 	return key;
 }
 
+void bgtm_assign_expr(kexpr_t *e, const bgt_info_t *ss)
+{
+	int i;
+	char key[5];
+	ke_set_int(e, "AN", ss->an);
+	ke_set_int(e, "AC", ss->ac[0]);
+	for (i = 0; i < ss->n_groups; ++i) {
+		ke_set_int(e, gen_group_key(key, 'N', i), ss->gan[i]);
+		ke_set_int(e, gen_group_key(key, 'C', i), ss->gac[i][0]);
+	}
+}
+
 int bgtm_pass_site_flt(const bgt_info_t *ss, kexpr_t *flt)
 {
-	int is_true, err, i;
-	char key[5];
+	int is_true, err;
 	if (flt == 0) return 1;
-	ke_set_int(flt, "AN", ss->an);
-	ke_set_int(flt, "AC", ss->ac[0]);
-	for (i = 0; i < ss->n_groups; ++i) {
-		ke_set_int(flt, gen_group_key(key, 'N', i), ss->gan[i]);
-		ke_set_int(flt, gen_group_key(key, 'C', i), ss->gac[i][0]);
-	}
+	bgtm_assign_expr(flt, ss);
 	is_true = !!ke_eval_int(flt, &err);
 	return err? 0 : is_true;
 }
@@ -556,6 +614,43 @@ void bgtm_cal_info(const bgtm_t *bm, bgt_info_t *ss)
 			ss->gac[i][1] = gcnt[i][3];
 		}
 	}
+}
+
+void bgtm_assign_by_bcf(kexpr_t *e, const bcf_hdr_t *h, const bcf1_t *b)
+{
+	int l_ref, l_alt, max_l;
+	char *ref, *alt, *tmp;
+	ke_set_str(e, "CHROM", h->id[BCF_DT_CTG][b->rid].key);
+	ke_set_int(e, "POS", b->pos + 1);
+	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
+	max_l = l_ref > l_alt? l_ref : l_alt;
+	tmp = (char*)alloca(max_l + 1);
+	strncpy(tmp, ref, l_ref); tmp[l_ref] = 0;
+	ke_set_str(e, "REF", tmp);
+	strncpy(tmp, alt, l_alt); tmp[l_alt] = 0;
+	ke_set_str(e, "ALT", tmp);
+}
+
+int bgtm_gen_tbl_line(bgtm_t *bm, const bgt_info_t *ss, const bcf1_t *b)
+{
+	int i, type, err;
+	kstring_t *s = &bm->tbl_line;
+	bm->tbl_line.l = 0;
+	for (i = 0; i < bm->n_fields; ++i) {
+		int64_t vi;
+		double vr;
+		const char *vs;
+		kexpr_t *e = bm->fields[i];
+		if (i) kputc('\t', s);
+		bgtm_assign_expr(e, ss);
+		bgtm_assign_by_bcf(e, bm->h_out, b);
+		err = ke_eval(e, &vi, &vr, &vs, &type);
+		if (err) kputc('*', s);
+		else if (type == KEV_INT) kputl(vi, s);
+		else if (type == KEV_REAL) ksprintf(s, "%lg", vr);
+		else if (type == KEV_STR) kputs(vs, s);
+	}
+	return 0;
 }
 
 int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
@@ -628,10 +723,12 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		bgt_al_from_bcf(bm->h_out, b, &bm->aal[bm->n_aal++]);
 	}
 	// fill AC/AN/etc and test site_flt
-	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_groups > 1) {
+	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_fields > 0 || bm->n_groups > 1) {
 		bgt_info_t ss;
 		bgtm_cal_info(bm, &ss);
 		bgtm_fill_info(bm->h_out, &ss, b);
+		if (bm->n_fields > 0)
+			bgtm_gen_tbl_line(bm, &ss, b);
 		if (!bgtm_pass_site_flt(&ss, bm->site_flt))
 			return 1;
 	}
@@ -802,48 +899,4 @@ void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a)
 	kputc(0, &a->chr);
 	kputsn(alt, l_alt, &a->chr);
 	a->al = a->chr.s + strlen(chr) + 1;
-}
-
-/*** ***/
-
-kexpr_t **bgt_parse_fields(const char *str, int *_n)
-{
-	int m = 0, n = 0, n_par = 0, i;
-	char **s = 0;
-	const char *q, *p;
-	kexpr_t **e = 0;
-	*_n = 0;
-	for (q = p = str;; ++p) {
-		if (*p == '(') ++n_par;
-		else if (*p == ')') --n_par;
-		else if (*p == 0 || (*p == ',' || n_par == 0)) {
-			if (m == n) {
-				m = m? m<<1 : 16;
-				s = (char**)realloc(s, m * sizeof(void*));
-			}
-			s[n] = (char*)calloc(p - q + 1, 1);
-			strncpy(s[n++], q, p - q);
-			q = p + 1;
-			if (*p == 0) break;
-		}
-	}
-	if (n_par == 0) {
-		e = (kexpr_t**)calloc(n, sizeof(kexpr_t*));
-		for (i = m = 0; i < n; ++i) {
-			int err, j;
-			e[i] = ke_parse(s[i], &err);
-			if (err) {
-				for (j = 0; j <= i; ++j)
-					ke_destroy(e[j]);
-				break;
-			}
-		}
-		if (i < n) {
-			free(e);
-			e = 0;
-		} else *_n = n;
-	}
-	for (i = 0; i < n; ++i) free(s[i]);
-	free(s);
-	return e;
 }

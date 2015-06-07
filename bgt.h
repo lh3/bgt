@@ -65,6 +65,10 @@ typedef struct {
 	bcf_hdr_t *h_out;
 	uint8_t *a[2];
 
+	int n_fields;
+	kexpr_t **fields;
+	kstring_t tbl_line;
+
 	int n_al, m_al, n_aal;
 	bgt_allele_t *al, *aal;
 	int *alcnt;
@@ -93,6 +97,7 @@ int bgtm_set_flt_site(bgtm_t *bm, const char *expr);
 void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_set_start(bgtm_t *bm, int64_t n);
+int bgtm_set_table(bgtm_t *bm, const char *fmt);
 void bgtm_add_group_core(bgtm_t *bm, int n, char *const* samples, const char *expr);
 void bgtm_add_group(bgtm_t *bm, const char *expr);
 int bgtm_add_allele(bgtm_t *bm, const char *al);
@@ -107,8 +112,6 @@ char *bgtm_alcnt_print(const bgtm_t *bm);
 int bgt_al_parse(const char *al, bgt_allele_t *a);
 int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a);
 void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a);
-
-kexpr_t **bgt_parse_fields(const char *str, int *_n);
 
 #ifdef __cplusplus
 }

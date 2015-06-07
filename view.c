@@ -13,16 +13,15 @@ char **hts_readlines(const char *fn, int *_n);
 
 int main_view(int argc, char *argv[])
 {
-	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, sample_only = 0, u_set = 0;
+	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, not_vcf = 0, u_set = 0;
 	long seekn = -1, n_rec = LONG_MAX, n_read = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
 	htsFile *out = 0;
 	char modew[8], *reg = 0, *site_flt = 0;
 	void *bed = 0;
-	int n_groups = 0, n_fields = 0;
-	char *gexpr[BGT_MAX_GROUPS], **al = 0;
-	kexpr_t **fields = 0;
+	int n_groups = 0;
+	char *gexpr[BGT_MAX_GROUPS], **al = 0, *fmt = 0;
 	int n_al = 0;
 	bgt_file_t **files = 0;
 
@@ -35,12 +34,12 @@ int main_view(int argc, char *argv[])
 		else if (c == 'B') bed = bed_read(optarg);
 		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
-		else if (c == 'S') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_AL, sample_only = 1;
-		else if (c == 'H') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_HAP, sample_only = 1;
+		else if (c == 'S') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_AL, not_vcf = 1;
+		else if (c == 'H') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_HAP, not_vcf = 1;
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
-		else if (c == 't') fields = bgt_parse_fields(optarg, &n_fields);
+		else if (c == 't') fmt = optarg, not_vcf = 1;
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 		else if (c == 'a') {
 			al = hts_readlines(optarg, &n_al);
@@ -102,6 +101,7 @@ int main_view(int argc, char *argv[])
 	if (site_flt) bgtm_set_flt_site(bm, site_flt);
 	if (reg) bgtm_set_region(bm, reg);
 	if (bed) bgtm_set_bed(bm, bed, excl);
+	if (fmt) bgtm_set_table(bm, fmt);
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
 	for (i = 0; i < n_al; ++i)
 		bgtm_add_allele(bm, al[i]);
@@ -114,7 +114,7 @@ int main_view(int argc, char *argv[])
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
 
-	if (!sample_only) {
+	if (!not_vcf) {
 		strcpy(modew, "w");
 		if (out_bcf) strcat(modew, "b");
 		sprintf(modew + strlen(modew), "%d", clevel);
@@ -125,11 +125,12 @@ int main_view(int argc, char *argv[])
 	b = bcf_init1();
 	while (bgtm_read(bm, b) >= 0 && n_read < n_rec) {
 		if (out) vcf_write1(out, bm->h_out, b);
+		if (fmt && bm->n_fields > 0) puts(bm->tbl_line.s);
 		++n_read;
 	}
 	bcf_destroy1(b);
 
-	if (sample_only && bm->n_al > 0) {
+	if (not_vcf && bm->n_al > 0) {
 		if (bm->flag & BGT_F_CNT_HAP) {
 			bgt_hapcnt_t *hc;
 			int n_hap;
@@ -152,8 +153,6 @@ int main_view(int argc, char *argv[])
 	if (bed) bed_destroy(bed);
 	for (i = 0; i < n_files; ++i) bgt_close(files[i]);
 	free(files);
-	for (i = 0; i < n_fields; ++i) ke_destroy(fields[i]);
-	free(fields);
 	for (i = 0; i < n_al; ++i) free(al[i]);
 	free(al);
 	return 0;
