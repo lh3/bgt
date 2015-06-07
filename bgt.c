@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include "bgt.h"
 #include "kstring.h"
+#include "fmf.h"
 
 #include "khash.h"
 KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
@@ -801,4 +802,48 @@ void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a)
 	kputc(0, &a->chr);
 	kputsn(alt, l_alt, &a->chr);
 	a->al = a->chr.s + strlen(chr) + 1;
+}
+
+/*** ***/
+
+kexpr_t **bgt_parse_fields(const char *str, int *_n)
+{
+	int m = 0, n = 0, n_par = 0, i;
+	char **s = 0;
+	const char *q, *p;
+	kexpr_t **e = 0;
+	*_n = 0;
+	for (q = p = str;; ++p) {
+		if (*p == '(') ++n_par;
+		else if (*p == ')') --n_par;
+		else if (*p == 0 || (*p == ',' || n_par == 0)) {
+			if (m == n) {
+				m = m? m<<1 : 16;
+				s = (char**)realloc(s, m * sizeof(void*));
+			}
+			s[n] = (char*)calloc(p - q + 1, 1);
+			strncpy(s[n++], q, p - q);
+			q = p + 1;
+			if (*p == 0) break;
+		}
+	}
+	if (n_par == 0) {
+		e = (kexpr_t**)calloc(n, sizeof(kexpr_t*));
+		for (i = m = 0; i < n; ++i) {
+			int err, j;
+			e[i] = ke_parse(s[i], &err);
+			if (err) {
+				for (j = 0; j <= i; ++j)
+					ke_destroy(e[j]);
+				break;
+			}
+		}
+		if (i < n) {
+			free(e);
+			e = 0;
+		} else *_n = n;
+	}
+	for (i = 0; i < n; ++i) free(s[i]);
+	free(s);
+	return e;
 }

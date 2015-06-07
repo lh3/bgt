@@ -42,10 +42,6 @@
 #define KET_OP    2
 #define KET_FUNC  3
 
-#define KEV_REAL  1
-#define KEV_INT   2
-#define KEV_STR   3
-
 #define KEF_NULL  0
 #define KEF_REAL  1
 
@@ -366,11 +362,11 @@ kexpr_t *ke_parse(const char *_s, int *err)
 	return ke;
 }
 
-int ke_eval(const kexpr_t *ke, int64_t *_i, double *_r, int *int_ret)
+int ke_eval(const kexpr_t *ke, int64_t *_i, double *_r, const char **_p, int *ret_type)
 {
 	ke1_t *stack, *p, *q;
 	int i, top = 0, err = 0;
-	*_i = 0, *_r = 0., *int_ret = 0;
+	*_i = 0, *_r = 0., *ret_type = 0;
 	for (i = 0; i < ke->n; ++i) {
 		ke1_t *e = &ke->e[i];
 		if ((e->ttype == KET_OP || e->ttype == KET_FUNC) && e->f.builtin == 0) err |= KEE_UNFUNC;
@@ -395,7 +391,8 @@ int ke_eval(const kexpr_t *ke, int64_t *_i, double *_r, int *int_ret)
 			} else top -= e->n_args - 1;
 		} else stack[top++] = *e;
 	}
-	*_i = stack->i, *_r = stack->r, *int_ret = (stack->vtype == KEV_INT);
+	*ret_type = stack->vtype;
+	*_i = stack->i, *_r = stack->r, *_p = stack->s;
 	free(stack);
 	return err;
 }	
@@ -405,7 +402,8 @@ int64_t ke_eval_int(const kexpr_t *ke, int *err)
 	int int_ret;
 	int64_t i;
 	double r;
-	*err = ke_eval(ke, &i, &r, &int_ret);
+	const char *s;
+	*err = ke_eval(ke, &i, &r, &s, &int_ret);
 	return i;
 }
 
@@ -414,7 +412,8 @@ double ke_eval_real(const kexpr_t *ke, int *err)
 	int int_ret;
 	int64_t i;
 	double r;
-	*err = ke_eval(ke, &i, &r, &int_ret);
+	const char *s;
+	*err = ke_eval(ke, &i, &r, &s, &int_ret);
 	return r;
 }
 
@@ -561,7 +560,8 @@ int main(int argc, char *argv[])
 	if (!to_print) {
 		int64_t vi;
 		double vr;
-		int i, int_ret;
+		const char *vs;
+		int i, ret_type;
 		if (argc - optind > 1) {
 			for (i = optind + 1; i < argc; ++i) {
 				char *p, *s = argv[i];
@@ -571,12 +571,13 @@ int main(int argc, char *argv[])
 				ke_set_real(ke, s, strtod(p+1, &p));
 			}
 		}
-		err |= ke_eval(ke, &vi, &vr, &int_ret);
+		err |= ke_eval(ke, &vi, &vr, &vs, &ret_type);
 		if (err & KEE_UNFUNC)
 			fprintf(stderr, "Evaluation warning: an undefined function returns the first function argument.\n");
 		if (err & KEE_UNVAR) fprintf(stderr, "Evaluation warning: unassigned variables are set to 0.\n");
-		if (is_int) printf("%lld\n", (long long)vi);
-		else printf("%g\n", vr);
+		if (ret_type == KEV_INT) printf("%lld\n", (long long)vi);
+		else if (ret_type == KEV_REAL) printf("%g\n", vr);
+		else printf("%s\n", vs);
 	} else ke_print(ke);
 	ke_destroy(ke);
 	return 0;

@@ -20,12 +20,13 @@ int main_view(int argc, char *argv[])
 	htsFile *out = 0;
 	char modew[8], *reg = 0, *site_flt = 0;
 	void *bed = 0;
-	int n_groups = 0;
+	int n_groups = 0, n_fields = 0;
 	char *gexpr[BGT_MAX_GROUPS], **al = 0;
+	kexpr_t **fields = 0;
 	int n_al = 0;
 	bgt_file_t **files = 0;
 
-	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SH")) >= 0) {
+	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SHt:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -39,6 +40,7 @@ int main_view(int argc, char *argv[])
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
+		else if (c == 't') fields = bgt_parse_fields(optarg, &n_fields);
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 		else if (c == 'a') {
 			al = hts_readlines(optarg, &n_al);
@@ -150,6 +152,8 @@ int main_view(int argc, char *argv[])
 	if (bed) bed_destroy(bed);
 	for (i = 0; i < n_files; ++i) bgt_close(files[i]);
 	free(files);
+	for (i = 0; i < n_fields; ++i) ke_destroy(fields[i]);
+	free(fields);
 	for (i = 0; i < n_al; ++i) free(al[i]);
 	free(al);
 	return 0;

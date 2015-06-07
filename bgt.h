@@ -108,6 +108,8 @@ int bgt_al_parse(const char *al, bgt_allele_t *a);
 int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a);
 void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a);
 
+kexpr_t **bgt_parse_fields(const char *str, int *_n);
+
 #ifdef __cplusplus
 }
 #endif

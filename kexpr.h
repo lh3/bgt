@@ -18,6 +18,11 @@ typedef struct kexpr_s kexpr_t;
 #define KEE_UNFUNC  0x40 // undefined function
 #define KEE_UNVAR   0x80 // unassigned variable
 
+// Return type
+#define KEV_REAL  1
+#define KEV_INT   2
+#define KEV_STR   3
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -48,7 +53,7 @@ extern "C" {
 	void ke_unset(kexpr_t *e);
 
 	// evaluate expression; return error code; final value is returned via pointers
-	int ke_eval(const kexpr_t *ke, int64_t *_i, double *_r, int *int_ret);
+	int ke_eval(const kexpr_t *ke, int64_t *_i, double *_r, const char **_s, int *ret_type);
 	int64_t ke_eval_int(const kexpr_t *ke, int *err);
 	double ke_eval_real(const kexpr_t *ke, int *err);
 
