@@ -124,7 +124,7 @@ void bgt_add_group(bgt_t *bgt, const char *expr)
 		is_file = 1;
 		fclose(fp);
 	}
-	if (*expr == ':' || (*expr != '?' && is_file)) {
+	if (*expr == ':' || *expr == ',' || (*expr != '?' && is_file)) {
 		int i, n;
 		char **samples;
 		samples = hts_readlines(expr, &n);
