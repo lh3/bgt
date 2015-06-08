@@ -29,6 +29,7 @@ while (<>) {
 
 	my @s = ($al);
 	my @u = split(",", $t[6]);
+	push(@s, "rsID:Z:$t[12]") if $t[12] ne '-';
 	for my $x (@u) {
 		push(@s, "effect:Z:$x");
 	}
@@ -46,6 +47,7 @@ while (<>) {
 	if ($t[13] =~ /DISTANCE=(\d+);STRAND=(\d+)/) {
 		push(@s, "distance:i:$1", "strand:i:$2");
 	}
+	push(@s, "codon:Z:$t[11]") if $t[10] ne '-';
 	if ($t[13] =~ /SIFT=([^\s;()]+)\(([\d.]+)\)/) {
 		push(@s, "SIFT:Z:$1");
 		push(@s, "SIFT_p:f:$2") if defined($2);
