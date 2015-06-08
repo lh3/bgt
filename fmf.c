@@ -23,7 +23,7 @@ fmf_t *fmf_read(const char *fn)
 	fmf_t *fmf = 0;
 	kstring_t s = {0,0,0};
 	int dret;
-	khash_t(s2i) *kh, *rh;
+	khash_t(s2i) *kh, *rh, *vh;
 
 	fp = fn && strcmp(fn, "-")? gzopen(fn, "r") : gzdopen(fileno(stdin), "r");
 	if (fp == 0) return 0;
@@ -31,6 +31,7 @@ fmf_t *fmf_read(const char *fn)
 	fmf = (fmf_t*)calloc(1, sizeof(fmf_t));
 	kh = kh_init(s2i);
 	rh = kh_init(s2i);
+	vh = kh_init(s2i);
 	while (ks_getuntil(ks, KS_SEP_LINE, &s, &dret) >= 0) {
 		char *p, *q, *r;
 		int i, absent, n_meta;
@@ -75,7 +76,20 @@ fmf_t *fmf_read(const char *fn)
 					if (c2 == ':' && p - r >= 3) {
 						if (r[1] == 'i') m->type = FMF_INT, m->v.i = strtol(r + 3, &r, 0);
 						else if (r[1] == 'f') m->type = FMF_REAL, m->v.r = strtod(r + 3, &r);
-						else m->type = FMF_STR, m->v.s = strdup(r + 3);
+						else {
+							char *s = r + 3;
+							m->type = FMF_STR;
+							k = kh_put(s2i, vh, s, &absent);
+							if (absent) {
+								if (fmf->n_vals == fmf->m_vals) {
+									fmf->m_vals = fmf->m_vals? fmf->m_vals<<1 : 8;
+									fmf->vals = (char**)realloc(fmf->vals, fmf->m_vals * sizeof(char*));
+								}
+								kh_val(vh, k) = fmf->n_vals;
+								kh_key(vh, k) = fmf->vals[fmf->n_vals++] = strdup(s);
+							}
+							m->v.s = (char*)kh_key(vh, k);
+						}
 					} else m->type = FMF_FLAG;
 				}
 				q = p + 1; ++i;
@@ -86,25 +100,24 @@ fmf_t *fmf_read(const char *fn)
 	free(s.s);
 	ks_destroy(ks);
 	gzclose(fp);
-	fmf->rh = rh, fmf->kh = kh;
+	fmf->rh = rh, fmf->kh = kh, fmf->vh = vh;
 	return fmf;
 }
 
 void fmf_destroy(fmf_t *f)
 {
-	int i, j;
+	int i;
 	if (f == 0) return;
 	for (i = 0; i < f->n_keys; ++i) free(f->keys[i]);
+	for (i = 0; i < f->n_vals; ++i) free(f->vals[i]);
 	for (i = 0; i < f->n_rows; ++i) {
 		fmf1_t *r = &f->rows[i];
-		for (j = 0; j < r->n_meta; ++j)
-			if (r->meta[j].type == FMF_STR)
-				free(r->meta[j].v.s);
 		free(r->name); free(r->meta);
 	}
-	free(f->rows); free(f->keys);
+	free(f->rows); free(f->keys); free(f->vals);
 	kh_destroy(s2i, (khash_t(s2i)*)f->kh);
 	kh_destroy(s2i, (khash_t(s2i)*)f->rh);
+	kh_destroy(s2i, (khash_t(s2i)*)f->vh);
 	free(f);
 }
 

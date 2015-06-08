@@ -62,12 +62,12 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "    -s EXPR      samples list (,sample1,sample2 or a file or expr; see Notes below) [all]\n");
 		fprintf(stderr, "  Site selection:\n");
 		fprintf(stderr, "    -r STR       region [all]\n");
-		fprintf(stderr, "    -B FILE      extract variants overlapping BED FILE [null]\n");
+		fprintf(stderr, "    -B FILE      extract variants overlapping BED FILE []\n");
 		fprintf(stderr, "    -e           exclude variants overlapping BED FILE (effective with -B)\n");
-		fprintf(stderr, "    -i INT       process from the INT-th record (1-based) [null]\n");
-		fprintf(stderr, "    -n INT       process at most INT records [null]\n");
-		fprintf(stderr, "    -a STR       alleles list chr:1basedPos:refLen:seq (,allele1,allele2 or a file) [null]\n");
-		fprintf(stderr, "    -f STR       frequency filters [null]\n");
+		fprintf(stderr, "    -i INT       process from the INT-th record (1-based) []\n");
+		fprintf(stderr, "    -n INT       process at most INT records []\n");
+		fprintf(stderr, "    -a STR       alleles list chr:1basedPos:refLen:seq (,allele1,allele2 or a file) []\n");
+		fprintf(stderr, "    -f STR       frequency filters []\n");
 		fprintf(stderr, "  VCF output:\n");
 		fprintf(stderr, "    -b           BCF output (effective without -S/-H)\n");
 		fprintf(stderr, "    -l INT       compression level for BCF [default]\n");
@@ -77,6 +77,8 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "  Non-VCF output:\n");
 		fprintf(stderr, "    -S           show samples with a set of alleles (with -a)\n");
 		fprintf(stderr, "    -H           count of haplotypes with a set of alleles (with -a)\n");
+		fprintf(stderr, "    -t STR       comma-delimited list of fields to output. Accepted variables:\n");
+		fprintf(stderr, "                 AC, AN, AC#, AN#, CHROM, POS, END, REF, ALT (# for a group number)\n");
 		fprintf(stderr, "Notes:\n");
 		fprintf(stderr, "  For option -s, EXPR can be one of:\n");
 		fprintf(stderr, "    1) comma-delimited sample list following a colon/comma. e.g. -s,NA12878,NA12044\n");

@@ -47,7 +47,7 @@ depend:
 
 atomic.o: atomic.h vcf.h bgzf.h hts.h kstring.h ksort.h
 bedidx.o: ksort.h kseq.h khash.h
-bgt.o: bgt.h vcf.h bgzf.h hts.h kstring.h pbwt.h khash.h ksort.h
+bgt.o: bgt.h vcf.h bgzf.h hts.h kstring.h pbwt.h fmf.h kexpr.h khash.h
 bgzf.o: bgzf.h
 fmf.o: fmf.h kexpr.h kseq.h khash.h kstring.h
 hts.o: bgzf.h hts.h kseq.h khash.h ksort.h
@@ -56,4 +56,4 @@ kexpr.o: kexpr.h
 pbfview.o: pbwt.h
 pbwt.o: pbwt.h ksort.h
 vcf.o: kstring.h bgzf.h vcf.h hts.h khash.h kseq.h
-view.o: bgt.h vcf.h bgzf.h hts.h kstring.h pbwt.h kexpr.h
+view.o: bgt.h vcf.h bgzf.h hts.h kstring.h pbwt.h fmf.h kexpr.h

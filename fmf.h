@@ -28,7 +28,9 @@ typedef struct {
 typedef struct {
 	int n_keys, m_keys;
 	char **keys;
-	void *kh, *rh;
+	int n_vals, m_vals;
+	char **vals;
+	void *kh, *rh, *vh;
 	int n_rows, m_rows;
 	fmf1_t *rows;
 } fmf_t;

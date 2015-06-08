@@ -622,6 +622,7 @@ void bgtm_assign_by_bcf(kexpr_t *e, const bcf_hdr_t *h, const bcf1_t *b)
 	char *ref, *alt, *tmp;
 	ke_set_str(e, "CHROM", h->id[BCF_DT_CTG][b->rid].key);
 	ke_set_int(e, "POS", b->pos + 1);
+	ke_set_int(e, "END", b->pos + b->rlen);
 	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
 	max_l = l_ref > l_alt? l_ref : l_alt;
 	tmp = (char*)alloca(max_l + 1);
