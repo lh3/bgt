@@ -21,8 +21,7 @@ int main_view(int argc, char *argv[])
 	char modew[8], *reg = 0, *site_flt = 0;
 	void *bed = 0;
 	int n_groups = 0;
-	char *gexpr[BGT_MAX_GROUPS], **al = 0, *fmt = 0;
-	int n_al = 0;
+	char *gexpr[BGT_MAX_GROUPS], *aexpr = 0, *fmt = 0;
 	bgt_file_t **files = 0;
 
 	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SHt:")) >= 0) {
@@ -41,14 +40,7 @@ int main_view(int argc, char *argv[])
 		else if (c == 'f') site_flt = optarg;
 		else if (c == 't') fmt = optarg, not_vcf = 1;
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
-		else if (c == 'a') {
-			al = hts_readlines(optarg, &n_al);
-			if (n_al > BGT_MAX_ALLELES) {
-				for (i = BGT_MAX_ALLELES; i < n_al; ++i) free(al[i]);
-				n_al = BGT_MAX_ALLELES;
-				fprintf(stderr, "[W::%s] only the first %d alleles are parsed\n", __func__, BGT_MAX_ALLELES);
-			}
-		}
+		else if (c == 'a') aexpr = optarg;
 	}
 	if (seekn < 0) seekn = 0;
 	if (clevel > 9) clevel = 9;
@@ -89,8 +81,8 @@ int main_view(int argc, char *argv[])
 		return 1;
 	}
 
-	if ((multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) && n_al == 0) {
-		fprintf(stderr, "[E::%s] at least one -a must be specified when -S/-H is in use.\n", __func__);
+	if ((multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) && aexpr == 0) {
+		fprintf(stderr, "[E::%s] -a must be specified when -S/-H is in use.\n", __func__);
 		return 1;
 	}
 
@@ -105,13 +97,7 @@ int main_view(int argc, char *argv[])
 	if (bed) bgtm_set_bed(bm, bed, excl);
 	if (fmt) bgtm_set_table(bm, fmt);
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
-	for (i = 0; i < n_al; ++i)
-		bgtm_add_allele(bm, al[i]);
-	if (multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) {
-		for (i = 1; i < bm->n_al; ++i)
-			if (strcmp(bm->al[0].chr.s, bm->al[i].chr.s) != 0)
-				fprintf(stderr, "[W::%s] alleles on different chr; unexpected errors may happen!\n", __func__);
-	}
+	if (aexpr) bgtm_set_alleles(bm, aexpr, 0);
 	for (i = 0; i < n_groups; ++i)
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
@@ -132,7 +118,7 @@ int main_view(int argc, char *argv[])
 	}
 	bcf_destroy1(b);
 
-	if (not_vcf && bm->n_al > 0) {
+	if (not_vcf && bm->n_aal > 0) {
 		if (bm->flag & BGT_F_CNT_HAP) {
 			bgt_hapcnt_t *hc;
 			int n_hap;
@@ -155,8 +141,6 @@ int main_view(int argc, char *argv[])
 	if (bed) bed_destroy(bed);
 	for (i = 0; i < n_files; ++i) bgt_close(files[i]);
 	free(files);
-	for (i = 0; i < n_al; ++i) free(al[i]);
-	free(al);
 	return 0;
 }
 

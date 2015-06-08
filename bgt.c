@@ -9,6 +9,7 @@
 
 #include "khash.h"
 KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
+KHASH_SET_INIT_STR(str)
 
 void *bed_read(const char *fn);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
@@ -297,18 +298,21 @@ void bgtm_reader_destroy(bgtm_t *bm)
 	free(bm->sample_idx);
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
 	free(bm->a[0]); free(bm->a[1]);
-	for (i = 0; i < bm->n_al; ++i) {
-		if (bm->aal) free(bm->aal[i].chr.s);
-		free(bm->al[i].chr.s);
-	}
+	for (i = 0; i < bm->n_aal; ++i) free(bm->aal[i].chr.s);
 	free(bm->aal);
-	free(bm->al);
 	for (i = 0; i < bm->n_fields; ++i)
 		ke_destroy(bm->fields[i]);
 	free(bm->fields);
 	free(bm->tbl_line.s);
 	for (i = 0; i < bm->n_bgt; ++i)
 		bgt_reader_destroy(bm->bgt[i]);
+	if (bm->h_al) {
+		khint_t k;
+		khash_t(str) *h = (khash_t(str)*)bm->h_al;
+		for (k = 0; k < kh_end(h); ++k)
+			if (kh_exist(h, k)) free((char*)kh_key(h, k));
+		kh_destroy(str, h);
+	}
 	free(bm->r); free(bm->bgt); free(bm);
 }
 
@@ -368,18 +372,75 @@ int bgtm_set_flt_site(bgtm_t *bm, const char *expr)
 	return 0;
 }
 
-int bgtm_add_allele(bgtm_t *bm, const char *al)
+int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f)
 {
-	int ret;
-	if (bm->n_al == bm->m_al) {
-		int oldm = bm->m_al;
-		bm->m_al = bm->m_al? bm->m_al<<1 : 4;
-		bm->al = (bgt_allele_t*)realloc(bm->al, bm->m_al * sizeof(bgt_allele_t));
-		memset(bm->al + oldm, 0, (bm->m_al - oldm) * sizeof(bgt_allele_t));
+	int i, is_file = 0, n_al = 0;
+	bgt_allele_t *al = 0;
+	FILE *fp;
+	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
+		is_file = 1;
+		fclose(fp);
 	}
-	ret = bgt_al_parse(al, &bm->al[bm->n_al]);
-	if (ret == 0) ++bm->n_al;
-	return ret;
+	if (*expr == ':' || *expr == ',' || (*expr != '?' && is_file) || f == 0) {
+		char **al_str;
+		int n;
+		al_str = hts_readlines(expr, &n);
+		al = (bgt_allele_t*)calloc(n, sizeof(bgt_allele_t));
+		for (i = 0; i < n; ++i) {
+			if (bgt_al_parse(al_str[i], &al[n_al]) == 0) ++n_al;
+			free(al_str[i]);
+		}
+		free(al_str);
+	} else if (f) {
+		int err, m_al = 0;
+		kexpr_t *ke;
+		ke = ke_parse(expr, &err);
+		if (err && ke) {
+			ke_destroy(ke);
+			return -1;
+		}
+		for (i = 0; i < f->n_rows; ++i) {
+			if (fmf_test(f, i, ke)) {
+				if (n_al == m_al) {
+					int oldm = m_al;
+					m_al = m_al? m_al<<1 : 4;
+					al = (bgt_allele_t*)realloc(al, m_al * sizeof(bgt_allele_t));
+					memset(al + oldm, 0, (m_al - oldm) * sizeof(bgt_allele_t));
+				}
+				if (bgt_al_parse(f->rows[i].name, &al[n_al]) == 0) ++n_al;
+			}
+		}
+	}
+	if (n_al > 0) {
+		int absent, diff_rid = 0;
+		int min_pos = INT_MAX, max_pos = INT_MIN;
+		khash_t(str) *h;
+		kstring_t s = {0,0,0};
+		khint_t k;
+		h = kh_init(str);
+		for (i = 0; i < n_al; ++i) {
+			bgt_al_format(&al[i], &s);
+			k = kh_put(str, h, s.s, &absent);
+			if (absent) {
+				kh_key(h, k) = strdup(s.s);
+				min_pos = min_pos < al[i].pos? min_pos : al[i].pos;
+				max_pos = max_pos > al[i].pos? max_pos : al[i].pos;
+				if (strcmp(al[i].chr.s, al[0].chr.s) != 0) diff_rid = 1;
+			}
+		}
+		free(s.s);
+		if (!diff_rid && bm->bgt[0]->itr == 0) {
+			char *reg;
+			reg = (char*)alloca(strlen(al[0].chr.s) + 23);
+			sprintf(reg, "%s:%d-%d", al[0].chr.s, min_pos+1, max_pos+1);
+			bgtm_set_region(bm, reg);
+		}
+		for (i = 0; i < n_al; ++i) free(al[i].chr.s);
+		free(al);
+		n_al = kh_size(h);
+		bm->h_al = (void*)h;
+	}
+	return n_al;
 }
 
 kexpr_t **bgt_parse_fields(const char *str, int *_n)
@@ -501,33 +562,12 @@ void bgtm_prepare(bgtm_t *bm)
 	bm->a[0] = (uint8_t*)realloc(bm->a[0], bm->n_out<<1);
 	bm->a[1] = (uint8_t*)realloc(bm->a[1], bm->n_out<<1);
 
-	// set al[].rid
-	for (i = 0; i < bm->n_al; ++i)
-		bm->al[i].rid = bcf_name2id(bm->h_out, bm->al[i].chr.s);
-
-	// set region if necessary
-	if (bm->n_al && bm->bgt[0]->itr == 0) {
-		char *reg;
-		int min_pos = INT_MAX, max_pos = INT_MIN;
-		for (i = 0; i < bm->n_al; ++i) {
-			bgt_allele_t *a = &bm->al[i];
-			min_pos = min_pos < a->pos? min_pos : a->pos;
-			max_pos = max_pos > a->pos? max_pos : a->pos;
-			if (a->rid < 0 || a->rid != bm->al[i].rid) break;
-		}
-		if (i == bm->n_al) {
-			reg = (char*)alloca(strlen(bm->al[0].chr.s) + 23);
-			sprintf(reg, "%s:%d-%d", bm->al[0].chr.s, min_pos+1, max_pos+1);
-			bgtm_set_region(bm, reg);
-		}
-	}
-
-	if (bm->n_al > 0) {
+	if (bm->h_al != 0) {
 		if (bm->flag&BGT_F_CNT_AL)
 			bm->alcnt = (int*)calloc(bm->n_out, sizeof(int));
 		if (bm->flag&BGT_F_CNT_HAP)
 			bm->hap = (uint64_t*)calloc(bm->n_out<<1, 8);
-		bm->aal = (bgt_allele_t*)calloc(bm->n_al, sizeof(bgt_allele_t));
+		bm->aal = (bgt_allele_t*)calloc(kh_size((khash_t(str)*)bm->h_al) * 2, sizeof(bgt_allele_t));
 	}
 }
 
@@ -654,6 +694,26 @@ int bgtm_gen_tbl_line(bgtm_t *bm, const bgt_info_t *ss, const bcf1_t *b)
 	return 0;
 }
 
+static int al_present(khash_t(str) *h, const bcf_hdr_t *hdr, const bcf1_t *b)
+{
+	int ret = 0;
+	bgt_allele_t a, r;
+	khint_t k;
+	kstring_t s = {0,0,0};
+	memset(&a, 0, sizeof(bgt_allele_t));
+	memset(&r, 0, sizeof(bgt_allele_t));
+	bgt_al_from_bcf(hdr, b, &a, &r);
+	bgt_al_format(&a, &s);
+	k = kh_get(str, h, s.s);
+	if (k == kh_end(h)) {
+		bgt_al_format(&r, &s);
+		k = kh_get(str, h, s.s);
+		if (k != kh_end(h)) ret = 2;
+	} else ret = 1;
+	free(s.s); free(a.chr.s); free(r.chr.s);
+	return ret;
+}
+
 int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 {
 	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref;
@@ -700,12 +760,11 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		off += bgt->n_out<<1;
 	}
 	// find samples having a set of alleles, or do haplotype counting
-	if (bm->n_al > 0) {
+	if (bm->h_al) {
 		int ret;
 		// test if the current record matches an allele
-		for (i = 0; i < bm->n_al; ++i) // NOTE: this is a quadratic algorithm; could be better
-			if ((ret = bgt_al_test(b, &bm->al[i])) != 0) break;
-		if (i == bm->n_al) return 1; // not matching any requested alleles
+		ret = al_present((khash_t(str)*)bm->h_al, bm->h_out, b);
+		if (ret == 0) return 1;
 		// +1 to samples having the allele
 		if ((bm->flag&BGT_F_CNT_AL) && bm->alcnt) {
 			int is_ref = (ret == 2);
@@ -721,7 +780,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 			for (i = 0; i < bm->n_out<<1; ++i)
 				if (bm->a[0][i] == 1 && bm->a[1][i] == 0) bm->hap[i] |= 1ULL<<bm->n_aal;
 		}
-		bgt_al_from_bcf(bm->h_out, b, &bm->aal[bm->n_aal++]);
+		bgt_al_from_bcf(bm->h_out, b, &bm->aal[bm->n_aal++], 0);
 	}
 	// fill AC/AN/etc and test site_flt
 	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_fields > 0 || bm->n_groups > 1) {
@@ -871,33 +930,37 @@ int bgt_al_parse(const char *al, bgt_allele_t *a) // TODO: add bgt_al_atomize()
 	return 0;
 }
 
-int bgt_al_test(const bcf1_t *b, const bgt_allele_t *a) // IMPORTANT: a->rid MUST be set
-{
-	int l_ref, l_alt, l_al, shift;
-	char *ref, *alt;
-	if (b->rid != a->rid) return 0;
-	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
-	for (shift = 0; shift < l_ref && shift < l_alt && ref[shift] == alt[shift]; ++shift);
-	l_ref -= shift, l_alt -= shift, ref += shift, alt += shift;
-	if (b->pos + shift != a->pos || b->rlen - shift != a->rlen) return 0;
-	l_al = strlen(a->al);
-	if (l_al == l_alt && strncmp(a->al, alt, l_alt) == 0) return 1;
-	if (l_al == l_ref && strncmp(a->al, ref, l_ref) == 0) return 2;
-	return 0;
-}
-
-void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a)
+void bgt_al_from_bcf(const bcf_hdr_t *h, const bcf1_t *b, bgt_allele_t *a, bgt_allele_t *r)
 {
 	char *ref, *alt;
 	const char *chr;
-	int l_ref, l_alt, min_l;
+	int l_ref, l_alt, min_l, shift, l_chr;
 	bcf_get_ref_alt1(b, &l_ref, &ref, &l_alt, &alt);
 	min_l = l_ref < l_alt? l_ref : l_alt;
-	a->rid = b->rid, a->pos = b->pos, a->rlen = b->rlen;
+	for (shift = 0; shift < min_l && ref[shift] == alt[shift]; ++shift);
+	a->rid = b->rid, a->pos = b->pos + shift, a->rlen = b->rlen - shift;
 	a->chr.l = 0;
 	chr = h->id[BCF_DT_CTG][b->rid].key;
-	kputs(chr, &a->chr);
+	l_chr = strlen(chr);
+	kputsn(chr, l_chr, &a->chr);
 	kputc(0, &a->chr);
-	kputsn(alt, l_alt, &a->chr);
-	a->al = a->chr.s + strlen(chr) + 1;
+	kputsn(alt + shift, l_alt - shift, &a->chr);
+	a->al = a->chr.s + l_chr + 1;
+	if (r) {
+		r->rid = b->rid, r->pos = b->pos + shift, r->rlen = b->rlen - shift;
+		r->chr.l = 0;
+		kputsn(chr, l_chr, &r->chr);
+		kputc(0, &r->chr);
+		kputsn(ref + shift, l_ref - shift, &r->chr);
+		r->al = r->chr.s + l_chr + 1;
+	}
+}
+
+void bgt_al_format(const bgt_allele_t *a, kstring_t *s)
+{
+	s->l = 0;
+	kputsn(a->chr.s, a->al - a->chr.s - 1, s); kputc(':', s);
+	kputw(a->pos, s); kputc(':', s);
+	kputw(a->rlen, s); kputc(':', s);
+	kputsn(a->al, a->chr.s + a->chr.l - a->al, s);
 }
