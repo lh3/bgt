@@ -233,7 +233,6 @@ static ke1_t ke_read_token(char *p, char **r, int *err, int last_is_val) // it d
 		else if (*p == '^') e.op = KEO_BXOR, e.f.builtin = ke_op_KEO_BXOR, e.n_args = 2, *r = q + 1;
 		else if (*p == '~') e.op = KEO_BNOT, e.f.builtin = ke_op_KEO_BNOT, e.n_args = 1, *r = q + 1;
 		else if (*p == '!') e.op = KEO_LNOT, e.f.builtin = ke_op_KEO_LNOT, e.n_args = 1, *r = q + 1;
-		else if (*p == '=') e.op = KEO_EQ, e.f.builtin = ke_op_KEO_EQ, e.n_args = 2, *r = q + 2;
 		else e.ttype = KET_NULL, *err |= KEE_UNOP;
 	}
 	return e;

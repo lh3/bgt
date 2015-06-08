@@ -20,7 +20,12 @@ while (<>) {
 	} elsif ($st == $en && length($t[2]) == 1) { # SNP
 		$al = "$chr:$st:1:$t[2]";
 	} elsif ($en - $st == 1) { # insertion
-		$al = "$chr:$en:0:$t[2]";
+		if ($t[2] eq 'insertion') {
+			$al = "$chr:$en:0:<INS>";
+			$is_sym = 1;
+		} else {
+			$al = "$chr:$en:0:$t[2]";
+		}
 	} else {
 		$al = "$chr:$st:" . ($en - $st + 1) . ":<$t[2]>";
 		$is_sym = 1;
@@ -29,7 +34,12 @@ while (<>) {
 
 	my @s = ($al);
 	my @u = split(",", $t[6]);
-	push(@s, "rsID:Z:$t[12]") if $t[12] ne '-';
+	if ($t[12] ne '-') {
+		my @v = split(",", $t[12]);
+		for my $v (@v) {
+			push(@s, "xref:Z:$v");
+		}
+	}
 	for my $x (@u) {
 		push(@s, "effect:Z:$x");
 	}
