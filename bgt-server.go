@@ -196,6 +196,12 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	if len(r.Form["n"]) > 0 { // set max number of records to read
 		max_read, _ = strconv.Atoi(r.Form["n"][0]);
 	}
+	if len(r.Form["t"]) > 0 { // tabular output
+		cstr := C.CString(r.Form["t"][0]);
+		C.bgtm_set_table(bm, cstr);
+		C.free(unsafe.Pointer(cstr));
+		vcf_out = false;
+	}
 	if len(r.Form["a"]) > 0 { // set alleles
 		cstr := C.CString(r.Form["a"][0]);
 		C.bgtm_set_alleles(bm, cstr, nil, nil);
@@ -232,6 +238,9 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 			gstr := C.GoString(s);
 			fmt.Fprintln(w, gstr);
 			C.free(unsafe.Pointer(s));
+		} else if int(bm.n_fields) > 0 {
+			gstr := C.GoString(bm.tbl_line.s);
+			fmt.Fprintln(w, gstr);
 		}
 		n_read += 1;
 	}
@@ -279,6 +288,8 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "Non-VCF output parameters:\n");
 	fmt.Fprintln(w, "  S       Output samples having requested alleles (requiring parameter 'a')\n");
 	fmt.Fprintln(w, "  H       Output counts of haplotypes across requested alleles (requiring parameter 'a')\n");
+	fmt.Fprintln(w, "  t STR   Comma-separated list of fields in tabular output. Accepted variables:");
+	fmt.Fprintln(w, "          CHROM, POS, END, REF, ALT, AC, AN, AC#, AN# (# for a group number)\n");
 }
 
 /*****************
