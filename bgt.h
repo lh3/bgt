@@ -32,6 +32,7 @@ typedef struct {
 	int bed_excl, n_out, n_groups, *out;
 	uint32_t *group, *flag;
 	bcf_hdr_t *h_out;
+	const void *h_al; // hash table for alleles; to be set by bgtm
 } bgt_t;
 
 typedef struct { // during reading, these are all links

@@ -197,6 +197,26 @@ void bgt_prepare(bgt_t *bgt)
 
 int bgt_bits2gt[4] = { (0+1)<<1, (1+1)<<1, 0<<1, (2+1)<<1 };
 
+static int al_present(khash_t(str) *h, const bcf_hdr_t *hdr, const bcf1_t *b)
+{
+	int ret = 0;
+	bgt_allele_t a, r;
+	khint_t k;
+	kstring_t s = {0,0,0};
+	memset(&a, 0, sizeof(bgt_allele_t));
+	memset(&r, 0, sizeof(bgt_allele_t));
+	bgt_al_from_bcf(hdr, b, &a, &r);
+	bgt_al_format(&a, &s);
+	k = kh_get(str, h, s.s);
+	if (k == kh_end(h)) {
+		bgt_al_format(&r, &s);
+		k = kh_get(str, h, s.s);
+		if (k != kh_end(h)) ret = 2;
+	} else ret = 1;
+	free(s.s); free(a.chr.s); free(r.chr.s);
+	return ret;
+}
+
 int bgt_read_core0(bgt_t *bgt)
 {
 	int i, id, row;
@@ -231,13 +251,16 @@ void bgt_gen_gt(const bcf_hdr_t *h, bcf1_t *b, int m, const uint8_t **a)
 
 int bgt_read_core(bgt_t *bgt)
 {
-	if (bgt->bed) {
+	if (bgt->bed || bgt->h_al) {
 		int ret;
 		while ((ret = bgt_read_core0(bgt)) >= 0) {
-			int r;
-			r = bed_overlap(bgt->bed, bgt->h_out->id[BCF_DT_CTG][bgt->b0->rid].key, bgt->b0->pos, bgt->b0->pos + bgt->b0->rlen);
-			if (bgt->bed_excl && r) continue;
-			if (!bgt->bed_excl && !r) continue;
+			if (bgt->bed) {
+				int r;
+				r = bed_overlap(bgt->bed, bgt->h_out->id[BCF_DT_CTG][bgt->b0->rid].key, bgt->b0->pos, bgt->b0->pos + bgt->b0->rlen);
+				if (bgt->bed_excl && r) continue;
+				if (!bgt->bed_excl && !r) continue;
+			}
+			if (bgt->h_al && !al_present((khash_t(str)*)bgt->h_al, bgt->h_out, bgt->b0)) continue;
 			break;
 		}
 		return ret;
@@ -454,6 +477,8 @@ int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f, const char *f
 		free(al);
 		n_al = kh_size(h);
 		bm->h_al = (void*)h;
+		for (i = 0; i < bm->n_bgt; ++i)
+			bm->bgt[i]->h_al = bm->h_al;
 	}
 	return n_al;
 }
@@ -707,26 +732,6 @@ int bgtm_gen_tbl_line(bgtm_t *bm, const bgt_info_t *ss, const bcf1_t *b)
 		else if (type == KEV_STR) kputs(vs, s);
 	}
 	return 0;
-}
-
-static int al_present(khash_t(str) *h, const bcf_hdr_t *hdr, const bcf1_t *b)
-{
-	int ret = 0;
-	bgt_allele_t a, r;
-	khint_t k;
-	kstring_t s = {0,0,0};
-	memset(&a, 0, sizeof(bgt_allele_t));
-	memset(&r, 0, sizeof(bgt_allele_t));
-	bgt_al_from_bcf(hdr, b, &a, &r);
-	bgt_al_format(&a, &s);
-	k = kh_get(str, h, s.s);
-	if (k == kh_end(h)) {
-		bgt_al_format(&r, &s);
-		k = kh_get(str, h, s.s);
-		if (k != kh_end(h)) ret = 2;
-	} else ret = 1;
-	free(s.s); free(a.chr.s); free(r.chr.s);
-	return ret;
 }
 
 int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
