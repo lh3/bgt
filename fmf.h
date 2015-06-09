@@ -34,9 +34,24 @@ typedef struct {
 	fmf1_t *rows;
 } fmf_t;
 
+struct fms_s;
+typedef struct fms_s fms_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 fmf_t *fmf_read(const char *fn);
 void fmf_destroy(fmf_t *f);
 char *fmf_write(const fmf_t *f, int r);
 int fmf_test(const fmf_t *f, int r, kexpr_t *ke);
+
+fms_t *fms_open(const char *fn);
+void fms_close(fms_t *f);
+const char *fms_read(fms_t *f, kexpr_t *ke, int name_only);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

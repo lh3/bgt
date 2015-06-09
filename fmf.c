@@ -155,84 +155,119 @@ int fmf_test(const fmf_t *f, int r, kexpr_t *ke) // FIXME: a quadratic implement
 	return !(err || !is_true);
 }
 
-char **fmf_test_stream(const char *fn, kexpr_t *ke, int *_n, int full_row)
-{
+struct fms_s {
 	kstream_t *ks;
+	kstring_t s;
 	gzFile fp;
-	kstring_t s = {0,0,0};
-	int dret, n = 0, m = 0;
-	char **rows = 0;
+};
 
-	*_n = 0;
+fms_t *fms_open(const char *fn)
+{
+	fms_t *f;
+	gzFile fp;
 	fp = fn && strcmp(fn, "-")? gzopen(fn, "r") : gzdopen(fileno(stdin), "r");
 	if (fp == 0) return 0;
-	ks = ks_init(fp);
-	while (ks_getuntil(ks, KS_SEP_LINE, &s, &dret) >= 0) {
-		char *p, *q, *r, *end0 = 0;
-		int i, err, is_true;
-		if (s.l == 0) continue;
-		ke_unset(ke);
-		for (p = q = s.s, i = 0;; ++p) {
-			if (*p == 0 || *p == '\t') {
-				int c = *p, c2;
-				*p = 0;
-				if (i == 0) { // row name
-					ke_set_str(ke, "_ROW_", q);
-					end0 = p;
-				} else { // metadata
-					for (r = q; *r && *r != ':'; ++r);
-					c2 = *r; *r = 0;
-					if (c2 == ':' && p - r >= 3) {
-						if (r[1] == 'i') ke_set_int(ke, q, strtol(r + 3, &r, 0));
-						else if (r[1] == 'f') ke_set_real(ke, q, strtod(r + 3, &r));
-						else ke_set_str(ke, q, r + 3);
-					}
-					*r = c2;
+	f = (fms_t*)calloc(1, sizeof(fms_t));
+	f->ks = ks_init(fp);
+	f->fp = fp;
+	return f;
+}
+
+void fms_close(fms_t *f)
+{
+	if (f == 0) return;
+	free(f->s.s);
+	ks_destroy(f->ks);
+	gzclose(f->fp);
+	free(f);
+}
+
+static int fms_read_and_test(fms_t *f, kexpr_t *ke, char **end0)
+{
+	char *p, *q, *r;
+	int i, err = 0, is_true, dret, ret;
+	ret = ks_getuntil(f->ks, KS_SEP_LINE, &f->s, &dret);
+	if (ret < 0) return ret;
+	if (f->s.l == 0) return 0;
+	if (ke) ke_unset(ke);
+	for (p = q = f->s.s, i = 0;; ++p) {
+		if (*p == 0 || *p == '\t') {
+			int c = *p, c2;
+			*p = 0;
+			if (i == 0) { // row name
+				if (ke) ke_set_str(ke, "_ROW_", q);
+				*end0 = p;
+			} else { // metadata
+				for (r = q; *r && *r != ':'; ++r);
+				c2 = *r; *r = 0;
+				if (c2 == ':' && p - r >= 3 && ke) {
+					if (r[1] == 'i') ke_set_int(ke, q, strtol(r + 3, &r, 0));
+					else if (r[1] == 'f') ke_set_real(ke, q, strtod(r + 3, &r));
+					else ke_set_str(ke, q, r + 3);
 				}
-				q = p + 1; ++i;
-				if (c == 0) break; // end-of-line
-				*p = c;
+				*r = c2;
 			}
-		}
-		is_true = !!ke_eval_int(ke, &err);
-		if (!err && is_true) {
-			if (n == m) {
-				m = m? m<<1 : 16;
-				rows = (char**)realloc(rows, sizeof(char*) * m);
-			}
-			if (!full_row) *end0 = 0;
-			rows[n++] = strdup(s.s);
+			q = p + 1; ++i;
+			if (c == 0) break; // end-of-line
+			*p = c;
 		}
 	}
-	free(s.s);
-	ks_destroy(ks);
-	gzclose(fp);
-	return rows;
+	is_true = ke == 0 || !!ke_eval_int(ke, &err);
+	return (!err && is_true);
 }
+
+const char *fms_read(fms_t *f, kexpr_t *ke, int name_only)
+{
+	int ret;
+	char *end0;
+	while ((ret = fms_read_and_test(f, ke, &end0)) == 0);
+	if (ret < 0) return 0;
+	if (name_only) *end0 = 0;
+	return f->s.s;
+}
+
+#ifndef FMF_LIB_ONLY
+#include <unistd.h>
 
 int main_fmf(int argc, char *argv[])
 {
-	fmf_t *f;
 	kexpr_t *ke = 0;
-	int i, err;
-	if (argc == 1) {
-		fprintf(stderr, "Usage: fmf <in.fmf> [condition]\n");
+	int i, c, err, in_mem = 0, name_only = 0;
+	while ((c = getopt(argc, argv, "mn")) >= 0)
+		if (c == 'm') in_mem = 1;
+		else if (c == 'n') name_only = 1;
+	if (argc == optind) {
+		fprintf(stderr, "Usage: fmf [-mn] <in.fmf> [condition]\n");
 		return 1;
 	}
-	f = fmf_read(argv[1]);
-	if (argc > 2) ke = ke_parse(argv[2], &err);
-	for (i = 0; i < f->n_rows; ++i) {
-		char *s;
-		if (ke && !fmf_test(f, i, ke)) continue;
-		s = fmf_write(f, i);
-		puts(s);
-		free(s);
+	if (argc - optind >= 2) ke = ke_parse(argv[optind+1], &err);
+	if (in_mem) {
+		fmf_t *f;
+		f = fmf_read(argv[optind]);
+		for (i = 0; i < f->n_rows; ++i) {
+			char *s;
+			if (ke && !fmf_test(f, i, ke)) continue;
+			if (!name_only) {
+				s = fmf_write(f, i);
+				puts(s);
+				free(s);
+			} else puts(f->rows[i].name);
+		}
+		fmf_destroy(f);
+	} else {
+		fms_t *f;
+		const char *s;
+		f = fms_open(argv[optind]);
+		while ((s = fms_read(f, ke, name_only)) != 0)
+			puts(s);
+		fms_close(f);
 	}
 	if (ke) ke_destroy(ke);
-	fmf_destroy(f);
 	return 0;
 }
 
 #ifdef FMF_MAIN
 int main(int argc, char *argv[]) { return main_fmf(argc, argv); }
+#endif
+
 #endif
