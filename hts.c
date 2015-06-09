@@ -102,6 +102,7 @@ char **hts_readlines(const char *fn, int *_n)
 	int m = 0, n = 0, dret;
 	char **s = 0;
 	gzFile fp;
+	if (_n) *_n = 0;
 	if ((fp = gzopen(fn, "r")) != 0) { // read from file
 		kstream_t *ks;
 		kstring_t str;

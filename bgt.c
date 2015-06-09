@@ -359,10 +359,11 @@ void bgtm_add_group(bgtm_t *bm, const char *expr)
 
 int bgtm_set_region(bgtm_t *bm, const char *reg)
 {
-	int i;
+	int i, ret = 0;
 	for (i = 0; i < bm->n_bgt; ++i)
-		bgt_set_region(bm->bgt[i], reg);
-	return 0;
+		if ((ret = bgt_set_region(bm->bgt[i], reg)) < 0)
+			break;
+	return ret;
 }
 
 int bgtm_set_start(bgtm_t *bm, int64_t n)

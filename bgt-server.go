@@ -183,13 +183,23 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(r.Form["f"]) > 0 { // set site filter
 		cstr := C.CString(bgs_replace_op(r.Form["f"][0]));
-		C.bgtm_set_flt_site(bm, cstr);
+		ret := int(C.bgtm_set_flt_site(bm, cstr));
 		C.free(unsafe.Pointer(cstr));
+		if ret != 0 {
+			C.bgtm_reader_destroy(bm);
+			http.Error(w, "400 Bad Request: failed to parse parameter 'f'", 400);
+			return;
+		}
 	}
 	if len(r.Form["r"]) > 0 { // set region
 		cstr := C.CString(r.Form["r"][0]);
-		C.bgtm_set_region(bm, cstr);
+		ret := int(C.bgtm_set_region(bm, cstr));
 		C.free(unsafe.Pointer(cstr));
+		if ret < 0 {
+			C.bgtm_reader_destroy(bm);
+			http.Error(w, "400 Bad Request: failed to set region with parameter 'r'", 400);
+			return;
+		}
 	}
 	if len(r.Form["i"]) > 0 { // set start
 		i, _ := strconv.Atoi(r.Form["i"][0]);
@@ -206,8 +216,17 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(r.Form["a"]) > 0 { // set alleles
 		cstr := C.CString(r.Form["a"][0]);
-		C.bgtm_set_alleles(bm, cstr, nil, nil);
+		n_al := int(C.bgtm_set_alleles(bm, cstr, nil, nil));
 		C.free(unsafe.Pointer(cstr));
+		if n_al <= 0 {
+			C.bgtm_reader_destroy(bm);
+			if n_al < 0 {
+				http.Error(w, "400 Bad Request: failed to retrieve alleles with parameter 'a'", 400);
+			} else {
+				http.Error(w, "204 No Content: no alleles matching parameter 'a'", 204);
+			}
+			return;
+		}
 	}
 	if len(r.Form["s"]) > 0 { // set sample groups
 		for _, s := range r.Form["s"] {
@@ -228,7 +247,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	b := C.bcf_init1();
 	n_read := 0;
 	for {
-		if n_read >= max_read || uint64(bm.n_gt_read) > bgt_max_gt {
+		if n_read > max_read || uint64(bm.n_gt_read) > bgt_max_gt {
 			break;
 		}
 		ret := int(C.bgtm_read(bm, b));
@@ -265,6 +284,10 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 
 	C.bgtm_reader_destroy(bm);
+
+	if n_read > max_read {
+		fmt.Fprintln(w, "*");
+	}
 }
 
 func bgs_help(w http.ResponseWriter, r *http.Request) {
