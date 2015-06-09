@@ -88,7 +88,7 @@ fmf_t *fmf_read(const char *fn)
 								kh_val(vh, k) = fmf->n_vals;
 								kh_key(vh, k) = fmf->vals[fmf->n_vals++] = strdup(s);
 							}
-							m->v.s = (char*)kh_key(vh, k);
+							m->v.s = kh_val(vh, k);
 						}
 					} else m->type = FMF_FLAG;
 				}
@@ -139,7 +139,7 @@ char *fmf_write(const fmf_t *f, int r)
 			kputc(':', &s);
 			if (m->type == FMF_INT) ksprintf(&s, "%lld", (long long)m->v.i);
 			else if (m->type == FMF_REAL) ksprintf(&s, "%g", m->v.r);
-			else kputs(m->v.s, &s);
+			else kputs(f->vals[m->v.s], &s);
 		}
 	}
 	return s.s;
@@ -154,7 +154,7 @@ int fmf_test(const fmf_t *f, int r, kexpr_t *ke) // FIXME: a quadratic implement
 	ke_unset(ke);
 	for (i = 0; i < u->n_meta; ++i) {
 		fmf_meta_t *m = &u->meta[i];
-		if (m->type == FMF_STR) ke_set_str(ke, f->keys[m->key], m->v.s);
+		if (m->type == FMF_STR) ke_set_str(ke, f->keys[m->key], f->vals[m->v.s]);
 		else if (m->type == FMF_INT) ke_set_int(ke, f->keys[m->key], m->v.i);
 		else if (m->type == FMF_REAL) ke_set_int(ke, f->keys[m->key], m->v.r);
 	}
