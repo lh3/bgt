@@ -219,7 +219,7 @@ static int fms_read_and_test(fms_t *f, kexpr_t *ke, char **end0)
 const char *fms_read(fms_t *f, kexpr_t *ke, int name_only)
 {
 	int ret;
-	char *end0;
+	char *end0 = 0;
 	while ((ret = fms_read_and_test(f, ke, &end0)) == 0);
 	if (ret < 0) return 0;
 	if (name_only) *end0 = 0;
@@ -238,6 +238,9 @@ int main_fmf(int argc, char *argv[])
 		else if (c == 'n') name_only = 1;
 	if (argc == optind) {
 		fprintf(stderr, "Usage: fmf [-mn] <in.fmf> [condition]\n");
+		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "  -m   load the entire FMF into RAM\n");
+		fprintf(stderr, "  -n   only output the row name (the 1st column)\n");
 		return 1;
 	}
 	if (argc - optind >= 2) ke = ke_parse(argv[optind+1], &err);

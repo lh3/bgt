@@ -372,16 +372,29 @@ int bgtm_set_flt_site(bgtm_t *bm, const char *expr)
 	return 0;
 }
 
-int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f)
+static inline bgt_allele_t *add_allele(bgt_allele_t *al, int *n, int *m, const char *s)
+{
+	if (*n == *m) {
+		int oldm = *m;
+		*m = *m? *m<<1 : 4;
+		al = (bgt_allele_t*)realloc(al, *m * sizeof(bgt_allele_t));
+		memset(al + oldm, 0, (*m - oldm) * sizeof(bgt_allele_t));
+	}
+	if (bgt_al_parse(s, &al[*n]) == 0) ++(*n);
+	return al;
+}
+
+int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f, const char *fn)
 {
 	int i, is_file = 0, n_al = 0;
 	bgt_allele_t *al = 0;
 	FILE *fp;
+	assert(f == 0 || fn == 0);
 	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
 		is_file = 1;
 		fclose(fp);
 	}
-	if (*expr == ':' || *expr == ',' || (*expr != '?' && is_file) || f == 0) {
+	if (*expr == ':' || *expr == ',' || (*expr != '?' && is_file) || (f == 0 && fn == 0)) {
 		char **al_str;
 		int n;
 		al_str = hts_readlines(expr, &n);
@@ -391,7 +404,7 @@ int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f)
 			free(al_str[i]);
 		}
 		free(al_str);
-	} else if (f) {
+	} else if (f || fn) {
 		int err, m_al = 0;
 		kexpr_t *ke;
 		ke = ke_parse(expr, &err);
@@ -399,16 +412,17 @@ int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f)
 			ke_destroy(ke);
 			return -1;
 		}
-		for (i = 0; i < f->n_rows; ++i) {
-			if (fmf_test(f, i, ke)) {
-				if (n_al == m_al) {
-					int oldm = m_al;
-					m_al = m_al? m_al<<1 : 4;
-					al = (bgt_allele_t*)realloc(al, m_al * sizeof(bgt_allele_t));
-					memset(al + oldm, 0, (m_al - oldm) * sizeof(bgt_allele_t));
-				}
-				if (bgt_al_parse(f->rows[i].name, &al[n_al]) == 0) ++n_al;
-			}
+		if (f) {
+			for (i = 0; i < f->n_rows; ++i)
+				if (fmf_test(f, i, ke))
+					al = add_allele(al, &n_al, &m_al, f->rows[i].name);
+		} else {
+			fms_t *f;
+			const char *s;
+			f = fms_open(fn);
+			while ((s = fms_read(f, ke, 1)) != 0)
+				al = add_allele(al, &n_al, &m_al, s);
+			fms_close(f);
 		}
 		ke_destroy(ke);
 	}

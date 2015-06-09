@@ -99,7 +99,7 @@ void bgtm_set_bed(bgtm_t *bm, const void *bed, int excl);
 int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_set_start(bgtm_t *bm, int64_t n);
 int bgtm_set_table(bgtm_t *bm, const char *fmt);
-int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f); // this should be AFTER bgtm_set_region()
+int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f, const char *fn); // call this AFTER bgtm_set_region()
 void bgtm_add_group_core(bgtm_t *bm, int n, char *const* samples, const char *expr);
 void bgtm_add_group(bgtm_t *bm, const char *expr);
 int bgtm_add_allele(bgtm_t *bm, const char *al);

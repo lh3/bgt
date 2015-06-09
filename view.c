@@ -13,7 +13,7 @@ char **hts_readlines(const char *fn, int *_n);
 
 int main_view(int argc, char *argv[])
 {
-	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, not_vcf = 0, u_set = 0;
+	int i, c, n_files = 0, out_bcf = 0, clevel = -1, multi_flag = 0, excl = 0, not_vcf = 0, in_mem = 0, u_set = 0;
 	long seekn = -1, n_rec = LONG_MAX, n_read = 0;
 	bgtm_t *bm = 0;
 	bcf1_t *b;
@@ -21,11 +21,11 @@ int main_view(int argc, char *argv[])
 	char modew[8], *reg = 0, *site_flt = 0;
 	void *bed = 0;
 	int n_groups = 0;
-	char *gexpr[BGT_MAX_GROUPS], *aexpr = 0, *fmt = 0;
+	char *gexpr[BGT_MAX_GROUPS], *aexpr = 0, *dbfn = 0, *fmt = 0;
 	bgt_file_t **files = 0;
 	fmf_t *vardb = 0;
 
-	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SHt:d:")) >= 0) {
+	while ((c = getopt(argc, argv, "ubs:r:l:AMGB:ef:g:a:i:n:SHt:d:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -36,11 +36,12 @@ int main_view(int argc, char *argv[])
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
 		else if (c == 'S') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_AL, not_vcf = 1;
 		else if (c == 'H') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_HAP, not_vcf = 1;
+		else if (c == 'M') in_mem = 1;
 		else if (c == 'i') seekn = atol(optarg) - 1;
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
 		else if (c == 't') fmt = optarg, not_vcf = 1;
-		else if (c == 'd') vardb = fmf_read(optarg);
+		else if (c == 'd') dbfn = optarg;
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 		else if (c == 'a') aexpr = optarg;
 	}
@@ -61,6 +62,7 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "    -i INT       process from the INT-th record (1-based) []\n");
 		fprintf(stderr, "    -n INT       process at most INT records []\n");
 		fprintf(stderr, "    -d FILE      variant annotations in FMF (to work with -a) []\n");
+		fprintf(stderr, "    -M           load variant annotations in RAM (only with -d)\n");
 		fprintf(stderr, "    -a EXPR      alleles list chr:1basedPos:refLen:seq (,allele1,allele2 or a file or expr) []\n");
 		fprintf(stderr, "    -f STR       frequency filters []\n");
 		fprintf(stderr, "  VCF output:\n");
@@ -84,6 +86,8 @@ int main_view(int argc, char *argv[])
 		return 1;
 	}
 
+	if (dbfn && in_mem) vardb = fmf_read(dbfn), dbfn = 0;
+
 	if ((multi_flag&(BGT_F_CNT_AL|BGT_F_CNT_HAP)) && aexpr == 0) {
 		fprintf(stderr, "[E::%s] -a must be specified when -S/-H is in use.\n", __func__);
 		return 1;
@@ -100,7 +104,7 @@ int main_view(int argc, char *argv[])
 	if (bed) bgtm_set_bed(bm, bed, excl);
 	if (fmt) bgtm_set_table(bm, fmt);
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
-	if (aexpr) bgtm_set_alleles(bm, aexpr, vardb);
+	if (aexpr) bgtm_set_alleles(bm, aexpr, vardb, dbfn);
 	for (i = 0; i < n_groups; ++i)
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
