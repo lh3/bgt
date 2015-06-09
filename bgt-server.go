@@ -115,7 +115,9 @@ func getopt(args []string, ostr string) (int, string) {
  ****************/
 
 var bgt_files [](*C.bgt_file_t);
+var bgt_file_names []string;
 var bgt_port string = ":8000";
+var bgt_max_gt uint64 = uint64(1000000);
 
 func bgtm_open(fns []string) ([](*C.bgt_file_t)) {
 	files := make([](*C.bgt_file_t), len(fns));
@@ -226,7 +228,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	b := C.bcf_init1();
 	n_read := 0;
 	for {
-		if n_read >= max_read {
+		if n_read >= max_read || uint64(bm.n_gt_read) > bgt_max_gt {
 			break;
 		}
 		ret := int(C.bgtm_read(bm, b));
@@ -299,9 +301,11 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// parse command line options
 	for {
-		opt, arg := getopt(os.Args, "p:");
+		opt, arg := getopt(os.Args, "p:m:");
 		if opt == 'p' {
 			bgt_port = fmt.Sprintf(":%s", arg);
+		} else if opt == 'm' {
+			bgt_max_gt, _ = strconv.ParseUint(arg, 10, 64);
 		} else if opt < 0 {
 			break;
 		}

@@ -58,6 +58,7 @@ typedef struct {
 
 typedef struct {
 	int n_bgt, n_out, n_groups, flag;
+	uint64_t n_gt_read;
 	uint64_t *sample_idx;
 	uint32_t *group;
 	bgt_t **bgt;

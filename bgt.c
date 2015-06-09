@@ -739,6 +739,7 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 		if (bm->r[i].b0 == 0)
 			bgt_read_rec(bm->bgt[i], &bm->r[i]);
 		n_rest += (bm->r[i].b0 != 0);
+		if (bm->r[i].b0) bm->n_gt_read += bm->bgt[i]->n_out;
 	}
 	if (n_rest == 0) return -1;
 	// search for the smallest allele
