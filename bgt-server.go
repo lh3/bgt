@@ -115,6 +115,7 @@ func getopt(args []string, ostr string) (int, string) {
  ****************/
 
 var bgt_files [](*C.bgt_file_t);
+var bgt_port string = ":8000";
 
 func bgtm_open(fns []string) ([](*C.bgt_file_t)) {
 	files := make([](*C.bgt_file_t), len(fns));
@@ -179,7 +180,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(r.Form["f"]) > 0 { // set site filter
-		cstr := C.CString(r.Form["f"][0]);
+		cstr := C.CString(bgs_replace_op(r.Form["f"][0]));
 		C.bgtm_set_flt_site(bm, cstr);
 		C.free(unsafe.Pointer(cstr));
 	}
@@ -202,7 +203,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(r.Form["s"]) > 0 { // set sample groups
 		for _, s := range r.Form["s"] {
-			cstr := C.CString(s);
+			cstr := C.CString(bgs_replace_op(s));
 			C.bgtm_add_group(bm, cstr);
 			C.free(unsafe.Pointer(cstr));
 		}
@@ -255,18 +256,41 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	C.bgtm_reader_destroy(bm);
 }
 
+func bgs_help(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintln(w, "This is a BGT server that has a similar interface to 'bgt view'. Query examples:\n");
+	fmt.Fprintf(w,  "  curl --data 's=(population==\"FIN\")&s=(population==\"CEU\")&G&f=(AC1>0.and.AC2>0)' 0.0.0.0%s/query\n", bgt_port);
+	fmt.Fprintf(w,  "  curl --data 'a=,11:151344:1:G,11:110992:AACTT:A,11:160513::G&S&s=(population==\"FIN\")' 0.0.0.0%s/query\n\n", bgt_port);
+	fmt.Fprintln(w, "Sample selection parameter:\n");
+	fmt.Fprintln(w, "  s EXPR  List of samples in a comma-leading comma-separate list (e.g. ,sample1,sample2) or an");
+	fmt.Fprintln(w, "          expression (e.g. s=population==\"FIN\"). There can be multiple 's' parameters. Each of");
+	fmt.Fprintln(w, "          them defines a sample group.\n");
+	fmt.Fprintln(w, "Site selection parameters:\n");
+	fmt.Fprintln(w, "  r STR   Region in a format like '11:200,000-300,000'\n");
+	fmt.Fprintln(w, "  i INT   Start from the i-th record; INT>0\n");
+	fmt.Fprintln(w, "  n INT   Read at most INT records\n");
+	fmt.Fprintln(w, "  a EXPR  List of alleles in a format similar to parameter 's'. An allele is specified by");
+	fmt.Fprintln(w, "          chr:1basedPos:refLen:alleleSeq. Conditions may not work unless the server is launched with");
+	fmt.Fprintln(w, "          a variant annotation database.\n");
+	fmt.Fprintln(w, "  f EXPR  Filters on per sample group allele counts. EXPR could include AC (primary allele count),");
+	fmt.Fprintln(w, "          AN (total called alleles), AC# (primary allele count of the #-th sample group) and AN#.\n");
+	fmt.Fprintln(w, "VCF output parameters:\n");
+	fmt.Fprintln(w, "  G       Don't output sample genotypes\n");
+	fmt.Fprintln(w, "  C       Output AC and AN VCF INFO fields. This parameter is automatically set if 's' is applied.\n");
+	fmt.Fprintln(w, "Non-VCF output parameters:\n");
+	fmt.Fprintln(w, "  S       Output samples having requested alleles (requiring parameter 'a')\n");
+	fmt.Fprintln(w, "  H       Output counts of haplotypes across requested alleles (requiring parameter 'a')\n");
+}
+
 /*****************
  * Main function *
  *****************/
 
 func main() {
-	port := ":8000";
-
 	// parse command line options
 	for {
 		opt, arg := getopt(os.Args, "p:");
 		if opt == 'p' {
-			port = fmt.Sprintf(":%s", arg);
+			bgt_port = fmt.Sprintf(":%s", arg);
 		} else if opt < 0 {
 			break;
 		}
@@ -279,7 +303,8 @@ func main() {
 	bgt_files = bgtm_open(os.Args[optind:]);
 	defer bgtm_close(bgt_files);
 
+	http.HandleFunc("/", bgs_help);
 	http.HandleFunc("/query", bgs_query);
 	fmt.Fprintln(os.Stderr, "MESSAGE: server started...");
-	http.ListenAndServe(port, nil);
+	http.ListenAndServe(bgt_port, nil);
 }
