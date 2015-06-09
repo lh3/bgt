@@ -23,8 +23,9 @@ int main_view(int argc, char *argv[])
 	int n_groups = 0;
 	char *gexpr[BGT_MAX_GROUPS], *aexpr = 0, *fmt = 0;
 	bgt_file_t **files = 0;
+	fmf_t *vardb = 0;
 
-	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SHt:")) >= 0) {
+	while ((c = getopt(argc, argv, "ubs:r:l:AGB:ef:g:a:i:n:SHt:d:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
@@ -39,6 +40,7 @@ int main_view(int argc, char *argv[])
 		else if (c == 'n') n_rec = atol(optarg);
 		else if (c == 'f') site_flt = optarg;
 		else if (c == 't') fmt = optarg, not_vcf = 1;
+		else if (c == 'd') vardb = fmf_read(optarg);
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 		else if (c == 'a') aexpr = optarg;
 	}
@@ -58,7 +60,8 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "    -e           exclude variants overlapping BED FILE (effective with -B)\n");
 		fprintf(stderr, "    -i INT       process from the INT-th record (1-based) []\n");
 		fprintf(stderr, "    -n INT       process at most INT records []\n");
-		fprintf(stderr, "    -a STR       alleles list chr:1basedPos:refLen:seq (,allele1,allele2 or a file) []\n");
+		fprintf(stderr, "    -d FILE      variant annotations in FMF (to work with -a) []\n");
+		fprintf(stderr, "    -a EXPR      alleles list chr:1basedPos:refLen:seq (,allele1,allele2 or a file or expr) []\n");
 		fprintf(stderr, "    -f STR       frequency filters []\n");
 		fprintf(stderr, "  VCF output:\n");
 		fprintf(stderr, "    -b           BCF output (effective without -S/-H)\n");
@@ -72,10 +75,10 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "    -t STR       comma-delimited list of fields to output. Accepted variables:\n");
 		fprintf(stderr, "                 AC, AN, AC#, AN#, CHROM, POS, END, REF, ALT (# for a group number)\n");
 		fprintf(stderr, "Notes:\n");
-		fprintf(stderr, "  For option -s, EXPR can be one of:\n");
-		fprintf(stderr, "    1) comma-delimited sample list following a colon/comma. e.g. -s,NA12878,NA12044\n");
-		fprintf(stderr, "    2) space-delimited file with the first column giving a sample name. e.g. -s samples.txt\n");
-		fprintf(stderr, "    3) expression if .spl file contains metadata. e.g.: -s\"gender=='M'&&population!='CEU'\"\n");
+		fprintf(stderr, "  For option -s/-a, EXPR can be one of:\n");
+		fprintf(stderr, "    1) comma-delimited list following a colon/comma. e.g. -s,NA12878,NA12044\n");
+		fprintf(stderr, "    2) space-delimited file with the first column giving a sample/allele name. e.g. -s list.txt\n");
+		fprintf(stderr, "    3) expression if .spl/-d file contains metadata. e.g.: -s\"gender=='M'&&population!='CEU'\"\n");
 		fprintf(stderr, "  If multiple -s is specified, the AC/AN of the first group will be written to VCF INFO AC1/AN1,\n");
 		fprintf(stderr, "  the second to AC2/AN2, etc.\n");
 		return 1;
@@ -97,7 +100,7 @@ int main_view(int argc, char *argv[])
 	if (bed) bgtm_set_bed(bm, bed, excl);
 	if (fmt) bgtm_set_table(bm, fmt);
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
-	if (aexpr) bgtm_set_alleles(bm, aexpr, 0);
+	if (aexpr) bgtm_set_alleles(bm, aexpr, vardb);
 	for (i = 0; i < n_groups; ++i)
 		bgtm_add_group(bm, gexpr[i]);
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
@@ -141,6 +144,7 @@ int main_view(int argc, char *argv[])
 	if (bed) bed_destroy(bed);
 	for (i = 0; i < n_files; ++i) bgt_close(files[i]);
 	free(files);
+	if (vardb) fmf_destroy(vardb);
 	return 0;
 }
 

@@ -410,6 +410,7 @@ int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f)
 				if (bgt_al_parse(f->rows[i].name, &al[n_al]) == 0) ++n_al;
 			}
 		}
+		ke_destroy(ke);
 	}
 	if (n_al > 0) {
 		int absent, diff_rid = 0;
