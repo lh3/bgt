@@ -161,76 +161,50 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	bm := bgtm_reader_init(bgt_files);
 
 	{ // set flag
-		_, present := r.Form["G"];
-		if present {
+		if len(r.Form["G"]) > 0 {
 			flag |= 2; // BGT_F_NO_GT
 		}
-		_, present = r.Form["C"];
-		if present {
+		if len(r.Form["C"]) > 0 || len(r.Form["s"]) > 0 {
 			flag |= 1; // BGT_F_SET_AC
 	  	}
-		_, present = r.Form["S"];
-		if present {
+		if len(r.Form["S"]) > 0 {
 			flag |= 4; // BGT_F_CNT_HAP
 	  	}
-		_, present = r.Form["H"];
-		if present {
+		if len(r.Form["H"]) > 0 {
 			flag |= 8; // BGT_F_CNT_HAP
 	  	}
-		_, present = r.Form["s"];
-		if present {
-			flag |= 1; // BGT_F_SET_AC
-		}
 		C.bgtm_set_flag(bm, C.int(flag));
 		if (flag & 12) != 0 {
 			vcf_out = false;
 		}
 	}
-	{ // set site filter
-		a, present := r.Form["f"];
-		if present {
-			cstr := C.CString(a[0]);
-			C.bgtm_set_flt_site(bm, cstr);
+	if len(r.Form["f"]) > 0 { // set site filter
+		cstr := C.CString(r.Form["f"][0]);
+		C.bgtm_set_flt_site(bm, cstr);
+		C.free(unsafe.Pointer(cstr));
+	}
+	if len(r.Form["r"]) > 0 { // set region
+		cstr := C.CString(r.Form["r"][0]);
+		C.bgtm_set_region(bm, cstr);
+		C.free(unsafe.Pointer(cstr));
+	}
+	if len(r.Form["i"]) > 0 { // set start
+		i, _ := strconv.Atoi(r.Form["i"][0]);
+		C.bgtm_set_start(bm, C.int64_t(i));
+	}
+	if len(r.Form["n"]) > 0 { // set max number of records to read
+		max_read, _ = strconv.Atoi(r.Form["n"][0]);
+	}
+	if len(r.Form["a"]) > 0 { // set alleles
+		cstr := C.CString(r.Form["a"][0]);
+		C.bgtm_set_alleles(bm, cstr, nil, nil);
+		C.free(unsafe.Pointer(cstr));
+	}
+	if len(r.Form["s"]) > 0 { // set sample groups
+		for _, s := range r.Form["s"] {
+			cstr := C.CString(s);
+			C.bgtm_add_group(bm, cstr);
 			C.free(unsafe.Pointer(cstr));
-		}
-	}
-	{ // set region
-		a, present := r.Form["r"];
-		if present {
-			cstr := C.CString(a[0]);
-			C.bgtm_set_region(bm, cstr);
-			C.free(unsafe.Pointer(cstr));
-		}
-	}
-	{ // set start
-		a, present := r.Form["i"];
-		if present {
-			i, _ := strconv.Atoi(a[0]);
-			C.bgtm_set_start(bm, C.int64_t(i));
-		}
-	}
-	{ // set start
-		a, present := r.Form["n"];
-		if present {
-			max_read, _ = strconv.Atoi(a[0]);
-		}
-	}
-	{ // set alleles
-		a, present := r.Form["a"];
-		if present {
-			cstr := C.CString(a[0]);
-			C.bgtm_set_alleles(bm, cstr, nil, nil);
-			C.free(unsafe.Pointer(cstr));
-		}
-	}
-	{ // set sample groups
-		a, present := r.Form["s"];
-		if present {
-			for _, s := range a {
-				cstr := C.CString(s);
-				C.bgtm_add_group(bm, cstr);
-				C.free(unsafe.Pointer(cstr));
-			}
 		}
 	}
 	C.bgtm_prepare(bm);
@@ -262,7 +236,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 	C.bcf_destroy1(b);
 
-	// print hapcnt
+	// print hapcnt and/or sample list
 	if !vcf_out && int(bm.n_aal) > 0 {
 		if (flag & 8) != 0 {
 			s := C.bgtm_hapcnt2str(bm);
