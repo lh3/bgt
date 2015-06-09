@@ -23,14 +23,13 @@ fmf_t *fmf_read(const char *fn)
 	fmf_t *fmf = 0;
 	kstring_t s = {0,0,0};
 	int dret;
-	khash_t(s2i) *kh, *rh, *vh;
+	khash_t(s2i) *kh, *vh;
 
 	fp = fn && strcmp(fn, "-")? gzopen(fn, "r") : gzdopen(fileno(stdin), "r");
 	if (fp == 0) return 0;
 	ks = ks_init(fp);
 	fmf = (fmf_t*)calloc(1, sizeof(fmf_t));
 	kh = kh_init(s2i);
-	rh = kh_init(s2i);
 	vh = kh_init(s2i);
 	while (ks_getuntil(ks, KS_SEP_LINE, &s, &dret) >= 0) {
 		char *p, *q, *r;
@@ -51,11 +50,6 @@ fmf_t *fmf_read(const char *fn)
 					}
 					u = &fmf->rows[fmf->n_rows++];
 					u->name = strdup(q);
-					k = kh_put(s2i, rh, u->name, &absent);
-					if (!absent) {
-						if (fmf_verbose >= 2)
-							fprintf(stderr, "[W::%s] row '%s' is duplicated and not query-able.\n", __func__, u->name);
-					} else kh_val(rh, k) = fmf->n_rows - 1;
 					u->m_meta = n_meta, u->n_meta = 0;
 					u->meta = (fmf_meta_t*)calloc(u->m_meta, sizeof(fmf_meta_t));
 				} else { // metadata
@@ -100,7 +94,8 @@ fmf_t *fmf_read(const char *fn)
 	free(s.s);
 	ks_destroy(ks);
 	gzclose(fp);
-	fmf->rh = rh, fmf->kh = kh, fmf->vh = vh;
+	kh_destroy(s2i, kh);
+	kh_destroy(s2i, vh);
 	return fmf;
 }
 
@@ -115,9 +110,6 @@ void fmf_destroy(fmf_t *f)
 		free(r->name); free(r->meta);
 	}
 	free(f->rows); free(f->keys); free(f->vals);
-	kh_destroy(s2i, (khash_t(s2i)*)f->kh);
-	kh_destroy(s2i, (khash_t(s2i)*)f->rh);
-	kh_destroy(s2i, (khash_t(s2i)*)f->vh);
 	free(f);
 }
 
@@ -162,8 +154,7 @@ int fmf_test(const fmf_t *f, int r, kexpr_t *ke) // FIXME: a quadratic implement
 	return !(err || !is_true);
 }
 
-#ifdef FMF_MAIN
-int main(int argc, char *argv[])
+int main_fmf(int argc, char *argv[])
 {
 	fmf_t *f;
 	kexpr_t *ke = 0;
@@ -185,4 +176,7 @@ int main(int argc, char *argv[])
 	fmf_destroy(f);
 	return 0;
 }
+
+#ifdef FMF_MAIN
+int main(int argc, char *argv[]) { return main_fmf(argc, argv); }
 #endif

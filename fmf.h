@@ -13,9 +13,9 @@
 typedef struct {
 	uint32_t key:28, type:4;
 	union {
-		int64_t i;
-		double r;
-		int64_t s;
+		int32_t i;
+		float r;
+		uint32_t s;
 	} v;
 } fmf_meta_t;
 
@@ -30,7 +30,6 @@ typedef struct {
 	char **keys;
 	int n_vals, m_vals;
 	char **vals;
-	void *kh, *rh, *vh;
 	int n_rows, m_rows;
 	fmf1_t *rows;
 } fmf_t;
