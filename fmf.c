@@ -146,12 +146,68 @@ int fmf_test(const fmf_t *f, int r, kexpr_t *ke) // FIXME: a quadratic implement
 	ke_unset(ke);
 	for (i = 0; i < u->n_meta; ++i) {
 		fmf_meta_t *m = &u->meta[i];
+		ke_set_str(ke, "_ROW_", u->name);
 		if (m->type == FMF_STR) ke_set_str(ke, f->keys[m->key], f->vals[m->v.s]);
 		else if (m->type == FMF_INT) ke_set_int(ke, f->keys[m->key], m->v.i);
 		else if (m->type == FMF_REAL) ke_set_int(ke, f->keys[m->key], m->v.r);
 	}
 	is_true = !!ke_eval_int(ke, &err);
 	return !(err || !is_true);
+}
+
+char **fmf_test_stream(const char *fn, kexpr_t *ke, int *_n, int full_row)
+{
+	kstream_t *ks;
+	gzFile fp;
+	kstring_t s = {0,0,0};
+	int dret, n = 0, m = 0;
+	char **rows = 0;
+
+	*_n = 0;
+	fp = fn && strcmp(fn, "-")? gzopen(fn, "r") : gzdopen(fileno(stdin), "r");
+	if (fp == 0) return 0;
+	ks = ks_init(fp);
+	while (ks_getuntil(ks, KS_SEP_LINE, &s, &dret) >= 0) {
+		char *p, *q, *r, *end0 = 0;
+		int i, err, is_true;
+		if (s.l == 0) continue;
+		ke_unset(ke);
+		for (p = q = s.s, i = 0;; ++p) {
+			if (*p == 0 || *p == '\t') {
+				int c = *p, c2;
+				*p = 0;
+				if (i == 0) { // row name
+					ke_set_str(ke, "_ROW_", q);
+					end0 = p;
+				} else { // metadata
+					for (r = q; *r && *r != ':'; ++r);
+					c2 = *r; *r = 0;
+					if (c2 == ':' && p - r >= 3) {
+						if (r[1] == 'i') ke_set_int(ke, q, strtol(r + 3, &r, 0));
+						else if (r[1] == 'f') ke_set_real(ke, q, strtod(r + 3, &r));
+						else ke_set_str(ke, q, r + 3);
+					}
+					*r = c2;
+				}
+				q = p + 1; ++i;
+				if (c == 0) break; // end-of-line
+				*p = c;
+			}
+		}
+		is_true = !!ke_eval_int(ke, &err);
+		if (!err && is_true) {
+			if (n == m) {
+				m = m? m<<1 : 16;
+				rows = (char**)realloc(rows, sizeof(char*) * m);
+			}
+			if (!full_row) *end0 = 0;
+			rows[n++] = strdup(s.s);
+		}
+	}
+	free(s.s);
+	ks_destroy(ks);
+	gzclose(fp);
+	return rows;
 }
 
 int main_fmf(int argc, char *argv[])
