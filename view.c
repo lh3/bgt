@@ -25,14 +25,14 @@ int main_view(int argc, char *argv[])
 	bgt_file_t **files = 0;
 	fmf_t *vardb = 0;
 
-	while ((c = getopt(argc, argv, "ubs:r:l:AMGB:ef:g:a:i:n:SHt:d:")) >= 0) {
+	while ((c = getopt(argc, argv, "ubs:r:l:CMGB:ef:g:a:i:n:SHt:d:")) >= 0) {
 		if (c == 'b') out_bcf = 1;
 		else if (c == 'r') reg = optarg;
 		else if (c == 'l') clevel = atoi(optarg);
 		else if (c == 'e') excl = 1;
 		else if (c == 'u') u_set = 1;
 		else if (c == 'B') bed = bed_read(optarg);
-		else if (c == 'A') multi_flag |= BGT_F_SET_AC;
+		else if (c == 'C') multi_flag |= BGT_F_SET_AC;
 		else if (c == 'G') multi_flag |= BGT_F_NO_GT;
 		else if (c == 'S') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_AL, not_vcf = 1;
 		else if (c == 'H') multi_flag |= BGT_F_NO_GT | BGT_F_CNT_HAP, not_vcf = 1;
@@ -70,7 +70,7 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "    -l INT       compression level for BCF [default]\n");
 		fprintf(stderr, "    -u           equivalent to -bl0 (overriding -b and -l)\n");
 		fprintf(stderr, "    -G           don't output sample genotypes\n");
-		fprintf(stderr, "    -A           write AC/AN to the INFO field (auto applied with -f or multipl -s)\n");
+		fprintf(stderr, "    -C           write AC/AN to the INFO field (auto applied with -f or multipl -s)\n");
 		fprintf(stderr, "  Non-VCF output:\n");
 		fprintf(stderr, "    -S           show samples with a set of alleles (with -a)\n");
 		fprintf(stderr, "    -H           count of haplotypes with a set of alleles (with -a)\n");
