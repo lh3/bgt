@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"unsafe"
+	"strconv"
 	"strings"
 )
 
@@ -31,25 +32,23 @@ void bgtm_set_file(bgtm_t *bm, int i, const bgt_file_t *f)
 	bm->bgt[i] = bgt_reader_init(f);
 }
 
-bgt_t *bgtm_get_bgt(bgtm_t *bm, int i)
+char *bgtm_format_bcf1(const bgtm_t *bm, const bcf1_t *v)
 {
-	return bm->bgt[i];
+	kstring_t s = {0,0,0};
+	vcf_format1(bm->h_out, v, &s);
+	return s.s;
 }
 
-void bgtm_al_set_rid(bgtm_t *bm, bgt_allele_t *a)
+char *bgtm_hapcnt2str(const bgtm_t *bm)
 {
-	if (bm->h_out == 0) bgtm_prepare(bm);
-	a->rid = bcf_name2id(bm->h_out, a->chr.s);
-}
-
-const fmf1_t *fmf_get_row(const fmf_t *f, int r)
-{
-	return &f->rows[r];
+	bgt_hapcnt_t *hc;
+	int n_hap;
+	char *s;
+	hc = bgtm_hapcnt(bm, &n_hap);
+	return bgtm_hapcnt_print_destroy(bm, n_hap, hc);
 }
 */
 import "C"
-
-var bgt_files [](*C.bgt_file_t);
 
 /****************
  * BSD getopt() *
@@ -115,11 +114,13 @@ func getopt(args []string, ostr string) (int, string) {
  * BGT wrappers *
  ****************/
 
+var bgt_files [](*C.bgt_file_t);
+
 func bgtm_open(fns []string) ([](*C.bgt_file_t)) {
 	files := make([](*C.bgt_file_t), len(fns));
 	for i := 0; i < len(fns); i += 1 {
 		cstr := C.CString(fns[i]);
-		defer C.free(unsafe.Pointer(cstr)); // on Mac, this triggers a weird error
+		defer C.free(unsafe.Pointer(cstr));
 		files[i] = C.bgt_open(cstr);
 	}
 	return files;
@@ -143,136 +144,141 @@ func bgtm_reader_init(files [](*C.bgt_file_t)) (*C.bgtm_t) {
  * Handlers *
  ************/
 
-func bgs_getvcf(w http.ResponseWriter, r *http.Request) {
-	bm := bgtm_reader_init(bgt_files);
-	r.ParseForm();
-	C.bgtm_reader_destroy(bm);
+func bgs_replace_op(t string) string {
+	s := strings.Replace(t, ".AND.", "&&", -1);
+	s = strings.Replace(s, ".and.", "&&", -1);
+	s = strings.Replace(s, ".OR.", "||", -1);
+	s = strings.Replace(s, ".or.", "||", -1);
+	return s;
 }
 
-func bgs_getbgt(w http.ResponseWriter, r *http.Request) {
-	for i := 0; i < len(bgt_files); i += 1 {
-		gstr := C.GoString(bgt_files[i].prefix);
-		fmt.Fprintf(w, "%d\t%s\n", i + 1, gstr);
-	}
-}
-
-func bgs_getspl(w http.ResponseWriter, r *http.Request) {
+func bgs_query(w http.ResponseWriter, r *http.Request) {
 	r.URL.RawQuery = strings.Replace(r.URL.RawQuery, "&&", ".AND.", -1);
 	r.ParseForm();
-	var expr *C.char = nil;
-	_, present_se := r.Form["se"];
-	if present_se {
-		s := strings.Replace(r.Form["se"][0], ".AND.", "&&", -1);
-		s = strings.Replace(s, ".and.", "&&", -1);
-		s = strings.Replace(s, ".OR.", "||", -1);
-		s = strings.Replace(s, ".or.", "&&", -1);
-		expr = C.CString(s);
-		defer C.free(unsafe.Pointer(expr));
-	}
+	flag := 0;
+	max_read := 2147483647;
+	vcf_out := true;
+	bm := bgtm_reader_init(bgt_files);
 
-	var cstr *C.char = nil;
-	_, present_a := r.Form["al"];
-	if present_a {
-		al := make([]C.bgt_allele_t, len(r.Form["al"]));
-		min_pos := 1<<30;
-		max_pos := 0;
-		for i := 0; i < len(al); i += 1 { // parse al
-			cstr = C.CString(r.Form["al"][i]);
-			C.bgt_al_parse(cstr, &al[i]);
+	{ // set flag
+		_, present := r.Form["G"];
+		if present {
+			flag |= 2; // BGT_F_NO_GT
+		}
+		_, present = r.Form["C"];
+		if present {
+			flag |= 1; // BGT_F_SET_AC
+	  	}
+		_, present = r.Form["S"];
+		if present {
+			flag |= 4; // BGT_F_CNT_HAP
+	  	}
+		_, present = r.Form["H"];
+		if present {
+			flag |= 8; // BGT_F_CNT_HAP
+	  	}
+		_, present = r.Form["s"];
+		if present {
+			flag |= 1; // BGT_F_SET_AC
+		}
+		C.bgtm_set_flag(bm, C.int(flag));
+		if (flag & 12) != 0 {
+			vcf_out = false;
+		}
+	}
+	{ // set site filter
+		a, present := r.Form["f"];
+		if present {
+			cstr := C.CString(a[0]);
+			C.bgtm_set_flt_site(bm, cstr);
 			C.free(unsafe.Pointer(cstr));
-			if i > 0 && C.strcmp(al[i].chr.s, al[0].chr.s) != 0 { // TODO: for now, only working when all al on the same chr
-				i -= 1;
-			}
-			if min_pos > int(al[i].pos) {
-				min_pos = int(al[i].pos);
-			}
-			if max_pos < int(al[i].pos) {
-				max_pos = int(al[i].pos);
-			}
-		}
-		bm := bgtm_reader_init(bgt_files);
-
-		reg := fmt.Sprintf("%s:%d-%d", C.GoString(al[0].chr.s), min_pos+1, max_pos+1);
-		cstr = C.CString(reg);
-		C.bgtm_set_region(bm, cstr);
-		C.free(unsafe.Pointer(cstr));
-
-		if present_se {
-			C.bgtm_add_group_core(bm, 0, nil, expr);
-		}
-
-		C.bgtm_prepare(bm);
-		for i := 0; i < len(al); i += 1 { // parse al
-			C.bgtm_al_set_rid(bm, &al[i]);
-		}
-		b := C.bcf_init1();
-		match_cnt := make([]int, int(bm.n_out)>>1);
-		for {
-			ret := int(C.bgtm_read(bm, b));
-			if ret < 0 {
-				break;
-			}
-			ret = 0;
-			for i := 0; i < len(al); i += 1 {
-				ret = int(C.bgt_al_test(b, &al[i]));
-				if ret != 0 {
-					break;
-				}
-			}
-			if ret == 0 {
-				continue;
-			}
-			is_ref := (ret == 2);
-			a0 := (*[1<<30]C.uint8_t)(unsafe.Pointer(bm.a[0]));
-			a1 := (*[1<<30]C.uint8_t)(unsafe.Pointer(bm.a[1]));
-			for i := 0; i < int(bm.n_out)>>1; i += 1 {
-				g1 := a0[i<<1|0] | a1[i<<1|0]<<1;
-				g2 := a0[i<<1|1] | a1[i<<1|1]<<1;
-				if (is_ref) {
-					if g1 == 0 || g2 == 0 {
-						match_cnt[i] += 1;
-					}
-				} else {
-					if g1 == 1 || g2 == 1 {
-						match_cnt[i] += 1;
-					}
-				}
-			}
-		}
-		C.bcf_destroy1(b);
-
-		sidx := (*[1<<30]C.uint64_t)(unsafe.Pointer(bm.sample_idx));
-		for i := 0; i < int(bm.n_out)>>1; i += 1 {
-			if match_cnt[i] == len(al) {
-				bgt := C.bgtm_get_bgt(bm, C.int(int64(sidx[i<<1])>>32));
-				gstr := C.GoString(C.fmf_get_row(bgt.f.f, C.int(sidx[i<<1])).name);
-				fmt.Fprintf(w, "%s\t%d\n", gstr, int(sidx[i<<1]>>32) + 1);
-			}
-		}
-
-		C.bgtm_reader_destroy(bm);
-		for i := 0; i < len(al); i += 1 { // free al
-			C.free(unsafe.Pointer(al[i].chr.s));
-		}
-	} else {
-		var ke *C.kexpr_t = nil;
-		if present_se {
-			var err C.int;
-			ke = C.ke_parse(expr, &err);
-		}
-		for i := 0; i < len(bgt_files); i += 1 {
-			f := bgt_files[i].f;
-			for j := 0; j < int(f.n_rows); j += 1 {
-				if ke == nil || C.fmf_test(f, C.int(j), ke) != C.int(0) {
-					gstr := C.GoString(C.fmf_get_row(f, C.int(j)).name);
-					fmt.Fprintf(w, "%s\t%d\n", gstr, i + 1);
-				}
-			}
-		}
-		if ke != nil {
-			C.ke_destroy(ke);
 		}
 	}
+	{ // set region
+		a, present := r.Form["r"];
+		if present {
+			cstr := C.CString(a[0]);
+			C.bgtm_set_region(bm, cstr);
+			C.free(unsafe.Pointer(cstr));
+		}
+	}
+	{ // set start
+		a, present := r.Form["i"];
+		if present {
+			i, _ := strconv.Atoi(a[0]);
+			C.bgtm_set_start(bm, C.int64_t(i));
+		}
+	}
+	{ // set start
+		a, present := r.Form["n"];
+		if present {
+			max_read, _ = strconv.Atoi(a[0]);
+		}
+	}
+	{ // set alleles
+		a, present := r.Form["a"];
+		if present {
+			cstr := C.CString(a[0]);
+			C.bgtm_set_alleles(bm, cstr, nil, nil);
+			C.free(unsafe.Pointer(cstr));
+		}
+	}
+	{ // set sample groups
+		a, present := r.Form["s"];
+		if present {
+			for _, s := range a {
+				cstr := C.CString(s);
+				C.bgtm_add_group(bm, cstr);
+				C.free(unsafe.Pointer(cstr));
+			}
+		}
+	}
+	C.bgtm_prepare(bm);
+
+	// print header if necessary
+	if vcf_out {
+		gstr := C.GoString(bm.h_out.text);
+		fmt.Fprintln(w, gstr);
+	}
+
+	// read through
+	b := C.bcf_init1();
+	n_read := 0;
+	for {
+		if n_read >= max_read {
+			break;
+		}
+		ret := int(C.bgtm_read(bm, b));
+		if ret < 0 {
+			break;
+		}
+		if vcf_out {
+			s := C.bgtm_format_bcf1(bm, b);
+			gstr := C.GoString(s);
+			fmt.Fprintln(w, gstr);
+			C.free(unsafe.Pointer(s));
+		}
+		n_read += 1;
+	}
+	C.bcf_destroy1(b);
+
+	// print hapcnt
+	if !vcf_out && int(bm.n_aal) > 0 {
+		if (flag & 8) != 0 {
+			s := C.bgtm_hapcnt2str(bm);
+			gstr := C.GoString(s);
+			fmt.Fprint(w, gstr);
+			C.free(unsafe.Pointer(s));
+		}
+		if (flag & 4) != 0 {
+			s := C.bgtm_alcnt_print(bm);
+			gstr := C.GoString(s);
+			fmt.Fprint(w, gstr);
+			C.free(unsafe.Pointer(s));
+		}
+	}
+
+	C.bgtm_reader_destroy(bm);
 }
 
 /*****************
@@ -292,15 +298,14 @@ func main() {
 		}
 	}
 	if optind == len(os.Args) {
-		fmt.Println("Usage: bgt-server [options] <bgt.pre1> [...]");
+		fmt.Fprintln(os.Stderr, "Usage: bgt-server [options] <bgt.pre1> [...]");
 		os.Exit(1);
 	}
 
 	bgt_files = bgtm_open(os.Args[optind:]);
 	defer bgtm_close(bgt_files);
 
-	http.HandleFunc("/getvcf", bgs_getvcf);
-	http.HandleFunc("/getbgt", bgs_getbgt);
-	http.HandleFunc("/getsamples", bgs_getspl);
+	http.HandleFunc("/query", bgs_query);
+	fmt.Fprintln(os.Stderr, "MESSAGE: server started...");
 	http.ListenAndServe(port, nil);
 }
