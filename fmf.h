@@ -15,7 +15,7 @@ typedef struct {
 	union {
 		int64_t i;
 		double r;
-		char *s;
+		int64_t s;
 	} v;
 } fmf_meta_t;
 
