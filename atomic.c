@@ -97,7 +97,7 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 {
 	int i, cid, l_ref, l_cigar = 0;
 	kstring_t cigar = {0,0,0};
-	char *p_cigar = 0, *p = 0;
+	char *p_cigar = 0;
 
 	for (i = 0; i < a->n; ++i)
 		a->a[i].from_new = 0;
@@ -111,7 +111,6 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 		assert(b->d.info[i].type == BCF_BT_CHAR);
 		p_cigar = (char*)b->d.info[i].vptr;
 		l_cigar = b->d.info[i].len;
-		p = p_cigar;
 	} else bcf_unpack(b, BCF_UN_STR);
 	l_ref = strlen(b->d.allele[0]);
 

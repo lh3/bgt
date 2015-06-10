@@ -96,7 +96,6 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 	} else if (n > 0 || expr != 0) {
 		int err, absent;
 		khash_t(s2i) *h;
-		khint_t k;
 		kexpr_t *ke = 0;
 
 		if (expr) {
@@ -109,7 +108,7 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 		}
 		h = kh_init(s2i);
 		for (i = 0; i < n; ++i)
-			k = kh_put(s2i, h, samples[i], &absent);
+			kh_put(s2i, h, samples[i], &absent);
 		for (i = 0; i < f->n_rows; ++i)
 			if ((kh_get(s2i, h, f->rows[i].name) != kh_end(h)) || (ke && fmf_test(f, i, ke)))
 				bgt->flag[i] |= 1<<bgt->n_groups;
