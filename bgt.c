@@ -96,7 +96,6 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 	} else if (n > 0 || expr != 0) {
 		int err, absent;
 		khash_t(s2i) *h;
-		khint_t k;
 		kexpr_t *ke = 0;
 
 		if (expr) {
