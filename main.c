@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#define BGT_VERSION "r199"
+#define BGT_VERSION "r200"
 
 int main_import(int argc, char *argv[]);
 int main_view(int argc, char *argv[]);
