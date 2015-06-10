@@ -115,6 +115,7 @@ func getopt(args []string, ostr string) (int, string) {
  ****************/
 
 var bgt_files [](*C.bgt_file_t);
+var bgt_vardb *C.fmf_t = nil;
 var bgt_file_names []string;
 var bgt_port string = ":8000";
 var bgt_max_gt uint64 = uint64(1000000);
@@ -216,7 +217,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(r.Form["a"]) > 0 { // set alleles
 		cstr := C.CString(r.Form["a"][0]);
-		n_al := int(C.bgtm_set_alleles(bm, cstr, nil, nil));
+		n_al := int(C.bgtm_set_alleles(bm, cstr, bgt_vardb, nil));
 		C.free(unsafe.Pointer(cstr));
 		if n_al <= 0 {
 			C.bgtm_reader_destroy(bm);
@@ -231,8 +232,12 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	if len(r.Form["s"]) > 0 { // set sample groups
 		for _, s := range r.Form["s"] {
 			cstr := C.CString(bgs_replace_op(s));
-			C.bgtm_add_group(bm, cstr);
+			ret := C.bgtm_add_group(bm, cstr);
 			C.free(unsafe.Pointer(cstr));
+			if ret < 0 {
+				http.Error(w, "400 Bad Request: failed to set sample group with parameter 's'", 400);
+				return;
+			}
 		}
 	}
 	C.bgtm_prepare(bm);
@@ -291,7 +296,9 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 }
 
 func bgs_help(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "This is a BGT server that has a similar interface to 'bgt view'. Query examples:\n");
+	fmt.Fprintln(w, "Manual");
+	fmt.Fprintln(w, "======\n");
+	fmt.Fprintln(w, "The BGT server has a similar interface to 'bgt view'. Query examples:\n");
 	fmt.Fprintf(w,  "  curl --data 's=(population==\"FIN\")&s=(population==\"CEU\")&G&f=(AC1>0.and.AC2>0)' 0.0.0.0%s/query\n", bgt_port);
 	fmt.Fprintf(w,  "  curl --data 'a=,11:151344:1:G,11:110992:AACTT:A,11:160513::G&S&s=(population==\"FIN\")' 0.0.0.0%s/query\n\n", bgt_port);
 	fmt.Fprintln(w, "Sample selection parameter:\n");
@@ -324,11 +331,15 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// parse command line options
 	for {
-		opt, arg := getopt(os.Args, "p:m:");
+		opt, arg := getopt(os.Args, "d:p:m:");
 		if opt == 'p' {
 			bgt_port = fmt.Sprintf(":%s", arg);
 		} else if opt == 'm' {
 			bgt_max_gt, _ = strconv.ParseUint(arg, 10, 64);
+		} else if opt == 'd' {
+			cstr := C.CString(arg);
+			bgt_vardb = C.fmf_read(cstr);
+			C.free(unsafe.Pointer(cstr));
 		} else if opt < 0 {
 			break;
 		}

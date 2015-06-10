@@ -85,7 +85,7 @@ void bgt_reader_destroy(bgt_t *bgt)
 
 /*** set samples, regions, etc. ***/
 
-void bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr)
+int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr)
 {
 	int i;
 	const fmf_t *f = bgt->f->f;
@@ -105,6 +105,7 @@ void bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *exp
 				ke_destroy(ke);
 				ke = 0;
 			}
+			if (ke == 0) return -1;
 		}
 		h = kh_init(s2i);
 		for (i = 0; i < n; ++i)
@@ -116,11 +117,12 @@ void bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *exp
 		ke_destroy(ke);
 	}
 	++bgt->n_groups;
+	return 0;
 }
 
-void bgt_add_group(bgt_t *bgt, const char *expr)
+int bgt_add_group(bgt_t *bgt, const char *expr)
 {
-	int is_file = 0;
+	int is_file = 0, ret = 0;
 	FILE *fp;
 	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
 		is_file = 1;
@@ -130,10 +132,11 @@ void bgt_add_group(bgt_t *bgt, const char *expr)
 		int i, n;
 		char **samples;
 		samples = hts_readlines(expr, &n);
-		bgt_add_group_core(bgt, n, samples, 0);
+		ret = bgt_add_group_core(bgt, n, samples, 0);
 		for (i = 0; i < n; ++i) free(samples[i]);
 		free(samples);
-	} else bgt_add_group_core(bgt, 0, 0, expr);
+	} else ret = bgt_add_group_core(bgt, 0, 0, expr);
+	return ret;
 }
 
 int bgt_set_region(bgt_t *bgt, const char *reg)
@@ -341,20 +344,14 @@ void bgtm_reader_destroy(bgtm_t *bm)
 
 /*** set samples, regions, etc. ***/
 
-void bgtm_add_group_core(bgtm_t *bm, int n, char *const* samples, const char *expr)
+int bgtm_add_group(bgtm_t *bm, const char *expr)
 {
-	int i;
+	int i, ret = 0;
 	for (i = 0; i < bm->n_bgt; ++i)
-		bgt_add_group_core(bm->bgt[i], n, samples, expr);
-	++bm->n_groups;
-}
-
-void bgtm_add_group(bgtm_t *bm, const char *expr)
-{
-	int i;
-	for (i = 0; i < bm->n_bgt; ++i)
-		bgt_add_group(bm->bgt[i], expr);
-	++bm->n_groups;
+		if ((ret = bgt_add_group(bm->bgt[i], expr)) < 0)
+			break;
+	if (ret == 0) ++bm->n_groups;
+	return ret;
 }
 
 int bgtm_set_region(bgtm_t *bm, const char *reg)
