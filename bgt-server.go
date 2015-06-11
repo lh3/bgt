@@ -178,10 +178,10 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "Example Queries");
 	fmt.Fprintln(w, "===============\n");
 	fmt.Fprintln(w, " * Variants present in both FIN and CEU populations (.and. represents the logical AND operator):\n");
-	fmt.Fprintf(w,  "   curl -s 'http://%s/?G&s=(population==\"FIN\")&s=(population==\"CEU\")&f=(AC1>0.and.AC2>0)'\n\n", r.Host);
+	fmt.Fprintf(w,  "   curl -s 'http://%s/?s=(population==\"FIN\")&s=(population==\"CEU\")&f=(AC1>0.and.AC2>0)'\n\n", r.Host);
 	if bgt_vardb != nil {
 		fmt.Fprintln(w, " * HIGH impact variants in the FIN population:\n");
-		fmt.Fprintf(w,  "   curl -s 'http://%s/?G&C&a=(impact==\"HIGH\")&s=(population==\"FIN\")&f=(AC>0)'\n\n", r.Host);
+		fmt.Fprintf(w,  "   curl -s 'http://%s/?a=(impact==\"HIGH\")&s=(population==\"FIN\")&f=(AC>0)'\n\n", r.Host);
 	}
 	fmt.Fprintln(w, " * Tabular output: chromosome, 1-based start, end positions, REF, ALT alleles and ALT allele frequency:\n");
 	fmt.Fprintf(w,  "   curl -s 'http://%s/?t=CHROM,POS,END,REF,ALT,AC/AN&f=(AN>0)&r=11:200,000-300,000'\n\n", r.Host);
@@ -204,7 +204,7 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "          AN (total called alleles), AC# (primary allele count of the #-th sample group) and AN#.\n");
 	fmt.Fprintln(w, "VCF output parameters:\n");
 	if !bgt_no_gt {
-		fmt.Fprintln(w, "  G       Don't output sample genotypes\n");
+		fmt.Fprintln(w, "  g       Output sample genotypes\n");
 	}
 	fmt.Fprintln(w, "  C       Output AC and AN VCF INFO fields. This parameter is automatically set if 's' is applied.\n");
 	fmt.Fprintln(w, "Non-VCF output parameters:\n");
@@ -229,19 +229,15 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 		bgs_help(w, r);
 		return;
 	}
-	flag := 0;
+	flag := 2; // BGT_F_NO_GT
 	max_read := 2147483647;
 	vcf_out := true;
 	bm := bgtm_reader_init(bgt_files);
 	defer C.bgtm_reader_destroy(bm);
 
-	if bgt_no_gt {
-		flag |= 2;
-	}
-
 	{ // set flag
-		if len(r.Form["G"]) > 0 {
-			flag |= 2; // BGT_F_NO_GT
+		if len(r.Form["g"]) > 0 && !bgt_no_gt {
+			flag &= 0xffff - 2;
 		}
 		if len(r.Form["C"]) > 0 || len(r.Form["s"]) > 0 {
 			flag |= 1; // BGT_F_SET_AC
@@ -413,6 +409,7 @@ func main() {
 		os.Exit(1);
 	}
 
+	C.bgt_no_file = 1;
 	bgt_files, bgt_prefix = bgtm_open(os.Args[optind:]);
 	defer bgtm_close(bgt_files);
 

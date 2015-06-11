@@ -45,10 +45,6 @@ int main_view(int argc, char *argv[])
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 		else if (c == 'a') aexpr = optarg;
 	}
-	if (seekn < 0) {
-		fprintf(stderr, "[E::%s] option -i must be at least 1.\n", __func__);
-		return 1;
-	}
 	if (n_rec < 0) {
 		fprintf(stderr, "[E::%s] option -n must be at least 0.\n", __func__);
 		return 1;
@@ -125,7 +121,7 @@ int main_view(int argc, char *argv[])
 		fprintf(stderr, "[E::%s] failed to set tabular output.\n", __func__);
 		return 1;
 	}
-	if (seekn >= 0) bgtm_set_start(bm, seekn);
+	if (seekn > 0) bgtm_set_start(bm, seekn);
 	if (aexpr) {
 		int n_al;
 		n_al = bgtm_set_alleles(bm, aexpr, vardb, dbfn);

@@ -11,6 +11,8 @@
 KHASH_DECLARE(s2i, kh_cstr_t, int64_t)
 KHASH_SET_INIT_STR(str)
 
+int bgt_no_file = 0;
+
 void *bed_read(const char *fn);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 void bed_destroy(void *_h);
@@ -74,7 +76,7 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 	bgt->f = bf;
 	fn = (char*)malloc(strlen(bf->prefix) + 9);
 	sprintf(fn, "%s.pbf", bf->prefix);
-	bgt->pb = pbf_open_r(fn);
+	bgt->pb = pbf_open_r(fn); // FIXME: check if .pbf is present
 	sprintf(fn, "%s.bcf", bf->prefix);
 	bgt->bcf = bgzf_open(fn, "rb");
 	bgt->b0 = bcf_init1();
@@ -131,14 +133,22 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 	return 0;
 }
 
-int bgt_add_group(bgt_t *bgt, const char *expr)
+static int bgt_is_file(const char *fn)
 {
-	int is_file = 0, ret = 0;
 	FILE *fp;
-	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
+	int is_file = 0;
+	if (bgt_no_file) return 0;
+	if ((fp = fopen(fn, "r")) != 0) {
 		is_file = 1;
 		fclose(fp);
 	}
+	return is_file;
+}
+
+int bgt_add_group(bgt_t *bgt, const char *expr)
+{
+	int is_file, ret = 0;
+	is_file = bgt_is_file(expr);
 	if (*expr == ':' || *expr == ',' || (*expr != '?' && is_file)) {
 		int i, n;
 		char **samples;
@@ -418,15 +428,11 @@ static inline bgt_allele_t *add_allele(bgt_allele_t *al, int *n, int *m, const c
 
 int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f, const char *fn)
 {
-	int i, is_file = 0, n_al = 0;
+	int i, is_file, n_al = 0;
 	bgt_allele_t *al = 0;
-	FILE *fp;
 	assert(f == 0 || fn == 0);
-	if ((fp = fopen(expr, "r")) != 0) { // test if expr is a file
-		is_file = 1;
-		fclose(fp);
-	}
-	if (*expr == ':' || *expr == ',' || (*expr != '?' && is_file) || (f == 0 && fn == 0)) {
+	is_file = bgt_is_file(expr);
+	if (*expr == ':' || *expr == ',' || (*expr != '?' && is_file) || (f == 0 && fn == 0 && is_file)) {
 		char **al_str;
 		int n;
 		al_str = hts_readlines(expr, &n);
@@ -455,7 +461,7 @@ int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f, const char *f
 			fms_close(f);
 		}
 		ke_destroy(ke);
-	}
+	} else return -1;
 	if (n_al > 0) {
 		int absent, diff_rid = 0;
 		int min_pos = INT_MAX, max_pos = INT_MIN;

@@ -78,6 +78,8 @@ typedef struct {
 	uint64_t *hap;
 } bgtm_t;
 
+extern int bgt_no_file;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
