@@ -184,7 +184,9 @@ static ke1_t ke_read_token(char *p, char **r, int *err, int last_is_val) // it d
 		e.ttype = KET_VAL;
 		y = strtod(q, &p);
 		x = strtol(q, &pp, 0); // FIXME: check int/double parsing errors
-		if (p > pp) { // has "." or "[eE]"; then it is a real number
+		if (q == p && q == pp) { // parse error
+			*err |= KEE_NUM;
+		} else if (p > pp) { // has "." or "[eE]"; then it is a real number
 			e.vtype = KEV_REAL;
 			e.i = (int64_t)(y + .5), e.r = y;
 			*r = p;

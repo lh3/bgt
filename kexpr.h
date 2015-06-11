@@ -13,6 +13,7 @@ typedef struct kexpr_s kexpr_t;
 #define KEE_UNOP    0x08 // unknown operators
 #define KEE_FUNC    0x10 // wrong function syntax
 #define KEE_ARG     0x20
+#define KEE_NUM     0x40 // fail to parse a number
 
 // Evaluation errors
 #define KEE_UNFUNC  0x40 // undefined function

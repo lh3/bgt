@@ -303,7 +303,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(r.Form["a"]) > 0 { // set alleles
-		cstr := C.CString(r.Form["a"][0]);
+		cstr := C.CString(bgs_replace_op(r.Form["a"][0]));
 		n_al := int(C.bgtm_set_alleles(bm, cstr, bgt_vardb, nil));
 		C.free(unsafe.Pointer(cstr));
 		if n_al <= 0 {
