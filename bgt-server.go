@@ -155,6 +155,65 @@ func bgtm_reader_init(files [](*C.bgt_file_t)) (*C.bgtm_t) {
  * Handlers *
  ************/
 
+func bgs_help(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintln(w, "Server Configuration");
+	fmt.Fprintln(w, "====================\n");
+	fmt.Fprintln(w, "The following configurations were set when the server was launched. Clients can't override them.\n");
+	fmt.Fprintln(w, " * BGT file prefix(es) and queryable sample annotations:");
+	for i := 0; i < len(bgt_files); i += 1 {
+		fmt.Fprintf(w, "   - %s: %s\n", bgt_prefix[i], bgs_fmf_keys(bgt_files[i].f));
+	}
+	fmt.Fprint(w, "\n");
+	if bgt_vardb != nil {
+		fmt.Fprintf(w, " * Queryable variant annotations: %s\n\n", bgs_fmf_keys(bgt_vardb));
+	} else {
+		fmt.Fprintf(w, " * No variant annotations specified.\n\n");
+	}
+	if bgt_no_gt {
+		fmt.Fprintf(w, " * This server doesn't report individual genotypes.\n\n");
+	} else {
+		fmt.Fprintf(w, " * This server may report individual genotypes.\n\n");
+	}
+	fmt.Fprintf(w,  " * Maximal genotypes processed internally per query: %d\n\n", bgt_max_gt);
+	fmt.Fprintln(w, "Example Queries");
+	fmt.Fprintln(w, "===============\n");
+	fmt.Fprintln(w, " * Variants present in both FIN and CEU populations (.and. represents the logical AND operator):\n");
+	fmt.Fprintf(w,  "   curl -s 'http://%s/?G&s=(population==\"FIN\")&s=(population==\"CEU\")&f=(AC1>0.and.AC2>0)'\n\n", r.Host);
+	if bgt_vardb != nil {
+		fmt.Fprintln(w, " * HIGH impact variants in the FIN population:\n");
+		fmt.Fprintf(w,  "   curl -s 'http://%s/?G&C&a=(impact==\"HIGH\")&s=(population==\"FIN\")&f=(AC>0)'\n\n", r.Host);
+	}
+	fmt.Fprintln(w, " * Tabular output: chromosome, 1-based start, end positions, REF, ALT alleles, total allele count and ALT count:\n");
+	fmt.Fprintf(w,  "   curl -s 'http://%s/?t=CHROM,POS,END,REF,ALT,AN,AC&r=11:200,000-300,000'\n\n", r.Host);
+	fmt.Fprintln(w, " * Samples in FIN that have three specified alleles:\n");
+	fmt.Fprintf(w,  "   curl -s 'http://%s/?a=,11:151344:1:G,11:110992:AACTT:A,11:160513::G&S&s=(population==\"FIN\")'\n\n", r.Host);
+	fmt.Fprintln(w, "Accepted Parameters");
+	fmt.Fprintln(w, "===================\n");
+	fmt.Fprintln(w, "Sample selection parameter:\n");
+	fmt.Fprintln(w, "  s EXPR  List of samples in a comma-leading comma-separate list (e.g. ,sample1,sample2) or an");
+	fmt.Fprintln(w, "          expression (e.g. s=population==\"FIN\"). There can be multiple 's' parameters. Each of");
+	fmt.Fprintln(w, "          them defines a sample group.\n");
+	fmt.Fprintln(w, "Site selection parameters:\n");
+	fmt.Fprintln(w, "  r STR   Region in a format like '11:200,000-300,000'\n");
+	fmt.Fprintln(w, "  i INT   Start from the i-th record; INT>0\n");
+	fmt.Fprintln(w, "  n INT   Read at most INT records\n");
+	fmt.Fprintln(w, "  a EXPR  List of alleles in a format similar to parameter 's'. An allele is specified by");
+	fmt.Fprintln(w, "          chr:1basedPos:refLen:alleleSeq. Conditions may not work unless the server is launched with");
+	fmt.Fprintln(w, "          a variant annotation database.\n");
+	fmt.Fprintln(w, "  f EXPR  Filters on per sample group allele counts. EXPR could include AC (primary allele count),");
+	fmt.Fprintln(w, "          AN (total called alleles), AC# (primary allele count of the #-th sample group) and AN#.\n");
+	fmt.Fprintln(w, "VCF output parameters:\n");
+	if !bgt_no_gt {
+		fmt.Fprintln(w, "  G       Don't output sample genotypes\n");
+	}
+	fmt.Fprintln(w, "  C       Output AC and AN VCF INFO fields. This parameter is automatically set if 's' is applied.\n");
+	fmt.Fprintln(w, "Non-VCF output parameters:\n");
+	fmt.Fprintln(w, "  S       Output samples having requested alleles (requiring parameter 'a')\n");
+	fmt.Fprintln(w, "  H       Output counts of haplotypes across requested alleles (requiring parameter 'a')\n");
+	fmt.Fprintln(w, "  t STR   Comma-separated list of fields in tabular output. Accepted variables:");
+	fmt.Fprintln(w, "          CHROM, POS, END, REF, ALT, AC, AN, AC#, AN# (# for a group number)\n");
+}
+
 func bgs_replace_op(t string) string {
 	s := strings.Replace(t, ".AND.", "&&", -1);
 	s = strings.Replace(s, ".and.", "&&", -1);
@@ -166,6 +225,10 @@ func bgs_replace_op(t string) string {
 func bgs_query(w http.ResponseWriter, r *http.Request) {
 	r.URL.RawQuery = strings.Replace(r.URL.RawQuery, "&&", ".AND.", -1);
 	r.ParseForm();
+	if len(r.Form) == 0 {
+		bgs_help(w, r);
+		return;
+	}
 	flag := 0;
 	max_read := 2147483647;
 	vcf_out := true;
@@ -314,65 +377,6 @@ func bgs_fmf_keys(f *C.fmf_t) ([]string) {
 	return s;
 }
 
-func bgs_help(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Server Configuration");
-	fmt.Fprintln(w, "====================\n");
-	fmt.Fprintln(w, "The following configurations were set when the server was launched. Clients can't override them.\n");
-	fmt.Fprintln(w, " * BGT file prefix(es) and queryable sample annotations:");
-	for i := 0; i < len(bgt_files); i += 1 {
-		fmt.Fprintf(w, "   - %s: %s\n", bgt_prefix[i], bgs_fmf_keys(bgt_files[i].f));
-	}
-	fmt.Fprint(w, "\n");
-	if bgt_vardb != nil {
-		fmt.Fprintf(w, " * Queryable variant annotations: %s\n\n", bgs_fmf_keys(bgt_vardb));
-	} else {
-		fmt.Fprintf(w, " * No variant annotations specified.\n\n");
-	}
-	if bgt_no_gt {
-		fmt.Fprintf(w, " * This server doesn't report individual genotypes.\n\n");
-	} else {
-		fmt.Fprintf(w, " * This server may report individual genotypes.\n\n");
-	}
-	fmt.Fprintf(w,  " * Maximal genotypes processed internally per query: %d\n\n", bgt_max_gt);
-	fmt.Fprintln(w, "Example Queries");
-	fmt.Fprintln(w, "===============\n");
-	fmt.Fprintln(w, " * Variants present in both FIN and CEU populations (.and. represents the logical AND operator):\n");
-	fmt.Fprintf(w,  "   curl -s 'http://%s/query?G&s=(population==\"FIN\")&s=(population==\"CEU\")&f=(AC1>0.and.AC2>0)'\n\n", r.Host);
-	if bgt_vardb != nil {
-		fmt.Fprintln(w, " * HIGH impact variants in the FIN population:\n");
-		fmt.Fprintf(w,  "   curl -s 'http://%s/query?G&C&a=(impact==\"HIGH\")&s=(population==\"FIN\")&f=(AC>0)'\n\n", r.Host);
-	}
-	fmt.Fprintln(w, " * Tabular output: chromosome, 1-based start, end positions, REF, ALT alleles, total allele count and ALT count:\n");
-	fmt.Fprintf(w,  "   curl -s 'http://%s/query?t=CHROM,POS,END,REF,ALT,AN,AC&r=11:200,000-300,000'\n\n", r.Host);
-	fmt.Fprintln(w, " * Samples in FIN that have three specified alleles:\n");
-	fmt.Fprintf(w,  "   curl -s 'http://%s/query?a=,11:151344:1:G,11:110992:AACTT:A,11:160513::G&S&s=(population==\"FIN\")'\n\n", r.Host);
-	fmt.Fprintln(w, "Accepted Parameters");
-	fmt.Fprintln(w, "===================\n");
-	fmt.Fprintln(w, "Sample selection parameter:\n");
-	fmt.Fprintln(w, "  s EXPR  List of samples in a comma-leading comma-separate list (e.g. ,sample1,sample2) or an");
-	fmt.Fprintln(w, "          expression (e.g. s=population==\"FIN\"). There can be multiple 's' parameters. Each of");
-	fmt.Fprintln(w, "          them defines a sample group.\n");
-	fmt.Fprintln(w, "Site selection parameters:\n");
-	fmt.Fprintln(w, "  r STR   Region in a format like '11:200,000-300,000'\n");
-	fmt.Fprintln(w, "  i INT   Start from the i-th record; INT>0\n");
-	fmt.Fprintln(w, "  n INT   Read at most INT records\n");
-	fmt.Fprintln(w, "  a EXPR  List of alleles in a format similar to parameter 's'. An allele is specified by");
-	fmt.Fprintln(w, "          chr:1basedPos:refLen:alleleSeq. Conditions may not work unless the server is launched with");
-	fmt.Fprintln(w, "          a variant annotation database.\n");
-	fmt.Fprintln(w, "  f EXPR  Filters on per sample group allele counts. EXPR could include AC (primary allele count),");
-	fmt.Fprintln(w, "          AN (total called alleles), AC# (primary allele count of the #-th sample group) and AN#.\n");
-	fmt.Fprintln(w, "VCF output parameters:\n");
-	if !bgt_no_gt {
-		fmt.Fprintln(w, "  G       Don't output sample genotypes\n");
-	}
-	fmt.Fprintln(w, "  C       Output AC and AN VCF INFO fields. This parameter is automatically set if 's' is applied.\n");
-	fmt.Fprintln(w, "Non-VCF output parameters:\n");
-	fmt.Fprintln(w, "  S       Output samples having requested alleles (requiring parameter 'a')\n");
-	fmt.Fprintln(w, "  H       Output counts of haplotypes across requested alleles (requiring parameter 'a')\n");
-	fmt.Fprintln(w, "  t STR   Comma-separated list of fields in tabular output. Accepted variables:");
-	fmt.Fprintln(w, "          CHROM, POS, END, REF, ALT, AC, AN, AC#, AN# (# for a group number)\n");
-}
-
 /*****************
  * Main function *
  *****************/
@@ -408,8 +412,7 @@ func main() {
 	bgt_files, bgt_prefix = bgtm_open(os.Args[optind:]);
 	defer bgtm_close(bgt_files);
 
-	http.HandleFunc("/", bgs_help);
-	http.HandleFunc("/query", bgs_query);
+	http.HandleFunc("/", bgs_query);
 	fmt.Fprintln(os.Stderr, "MESSAGE: server started...");
 	http.ListenAndServe(fmt.Sprintf(":%s", bgt_port), nil);
 }

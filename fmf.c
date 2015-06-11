@@ -184,7 +184,7 @@ void fms_close(fms_t *f)
 
 static int fms_read_and_test(fms_t *f, kexpr_t *ke, char **end0)
 {
-	char *p, *q, *r;
+	char *p, *q, *r, *rr;
 	int i, err = 0, is_true, dret, ret;
 	ret = ks_getuntil(f->ks, KS_SEP_LINE, &f->s, &dret);
 	if (ret < 0) return ret;
@@ -199,13 +199,13 @@ static int fms_read_and_test(fms_t *f, kexpr_t *ke, char **end0)
 				*end0 = p;
 			} else { // metadata
 				for (r = q; *r && *r != ':'; ++r);
-				c2 = *r; *r = 0;
+				c2 = *r; *r = 0; rr = r;
 				if (c2 == ':' && p - r >= 3 && ke) {
 					if (r[1] == 'i') ke_set_int(ke, q, strtol(r + 3, &r, 0));
 					else if (r[1] == 'f') ke_set_real(ke, q, strtod(r + 3, &r));
 					else ke_set_str(ke, q, r + 3);
 				}
-				*r = c2;
+				*rr = c2;
 			}
 			q = p + 1; ++i;
 			if (c == 0) break; // end-of-line
