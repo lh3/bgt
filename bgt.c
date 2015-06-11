@@ -21,30 +21,42 @@ void bed_destroy(void *_h);
 
 bgt_file_t *bgt_open(const char *prefix)
 {
-	char *fn;
-	bgt_file_t *bf;
-	BGZF *fp;
-	bf = (bgt_file_t*)calloc(1, sizeof(bgt_file_t));
+	char *fn = 0;
+	bgt_file_t *bf = 0;
+	BGZF *fp = 0;
+
 	fn = (char*)malloc(strlen(prefix) + 9);
-	bf->prefix = strdup(prefix);
-	sprintf(fn, "%s.spl", prefix);
-	bf->f = fmf_read(fn);
 	sprintf(fn, "%s.bcf", prefix);
 	fp = bgzf_open(fn, "rb");
+	if (fp == 0) goto bgt_open_err;
+	bf = (bgt_file_t*)calloc(1, sizeof(bgt_file_t));
 	bf->h0 = bcf_hdr_read(fp);
+	if (bf->h0 == 0) goto bgt_open_err;
 	bf->idx = bcf_index_load(fn);
+	if (bf->idx == 0) goto bgt_open_err;
+	sprintf(fn, "%s.spl", prefix);
+	bf->f = fmf_read(fn);
+	if (bf->f == 0) goto bgt_open_err;
+	bf->prefix = strdup(prefix);
 	bgzf_close(fp);
 	free(fn);
 	return bf;
+
+bgt_open_err:
+	free(fn);
+	if (fp) bgzf_close(fp);
+	if (bf) bgt_close(bf);
+	return 0;
 }
 
 void bgt_close(bgt_file_t *bf)
 {
 	if (bf == 0) return;
-	hts_idx_destroy(bf->idx);
-	bcf_hdr_destroy(bf->h0);
-	fmf_destroy(bf->f);
-	free(bf->prefix); free(bf);
+	if (bf->idx) hts_idx_destroy(bf->idx);
+	if (bf->h0) bcf_hdr_destroy(bf->h0);
+	if (bf->f) fmf_destroy(bf->f);
+	free(bf->prefix);
+	free(bf);
 }
 
 /**********************
@@ -428,10 +440,8 @@ int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f, const char *f
 		int err, m_al = 0;
 		kexpr_t *ke;
 		ke = ke_parse(expr, &err);
-		if (err && ke) {
-			ke_destroy(ke);
-			return -1;
-		}
+		if (err && ke) ke_destroy(ke);
+		if (err) return -1;
 		if (f) {
 			for (i = 0; i < f->n_rows; ++i)
 				if (fmf_test(f, i, ke))
@@ -514,7 +524,7 @@ kexpr_t **bgt_parse_fields(const char *str, int *_n)
 		}
 		if (i < n) {
 			free(e);
-			e = 0;
+			e = 0, *_n = 0;
 		} else *_n = n;
 	}
 	for (i = 0; i < n; ++i) free(s[i]);

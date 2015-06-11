@@ -274,7 +274,7 @@ static ke1_t *ke_parse_core(const char *_s, int *_n, int *err)
 				u = push_back(&out, &n_out, &m_out);
 				*u = op[--n_op];
 			}
-			if (n_op < 0) { // error: extra right parenthesis
+			if (n_op == 0) { // error: extra right parenthesis
 				*err |= KEE_UNRP;
 				break;
 			} else --n_op; // pop out '('

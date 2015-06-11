@@ -45,7 +45,14 @@ int main_view(int argc, char *argv[])
 		else if (c == 's' && n_groups < BGT_MAX_GROUPS) gexpr[n_groups++] = optarg;
 		else if (c == 'a') aexpr = optarg;
 	}
-	if (seekn < 0) seekn = 0;
+	if (seekn < 0) {
+		fprintf(stderr, "[E::%s] option -i must be at least 1.\n", __func__);
+		return 1;
+	}
+	if (n_rec < 0) {
+		fprintf(stderr, "[E::%s] option -n must be at least 0.\n", __func__);
+		return 1;
+	}
 	if (clevel > 9) clevel = 9;
 	if (u_set) clevel = 0, out_bcf = 1;
 	if (n_groups > 1) multi_flag |= BGT_F_SET_AC;
@@ -95,18 +102,45 @@ int main_view(int argc, char *argv[])
 
 	n_files = argc - optind;
 	files = (bgt_file_t**)calloc(n_files, sizeof(bgt_file_t*));
-	for (i = 0; i < n_files; ++i) files[i] = bgt_open(argv[optind+i]);
+	for (i = 0; i < n_files; ++i) {
+		files[i] = bgt_open(argv[optind+i]);
+		if (files[i] == 0) {
+			fprintf(stderr, "[E::%s] failed to open BGT with prefix '%s'\n", __func__, argv[optind+i]);
+			return 1; // FIXME: memory leak
+		}
+	}
 
 	bm = bgtm_reader_init(n_files, files);
 	bgtm_set_flag(bm, multi_flag);
-	if (site_flt) bgtm_set_flt_site(bm, site_flt);
-	if (reg) bgtm_set_region(bm, reg);
+	if (site_flt && bgtm_set_flt_site(bm, site_flt) != 0) {
+		fprintf(stderr, "[E::%s] failed to set frequency filters. Syntax error?\n", __func__);
+		return 1;
+	}
+	if (reg && bgtm_set_region(bm, reg) < 0) {
+		fprintf(stderr, "[E::%s] failed to set region. Region format error?\n", __func__);
+		return 1;
+	}
 	if (bed) bgtm_set_bed(bm, bed, excl);
-	if (fmt) bgtm_set_table(bm, fmt);
+	if (fmt && bgtm_set_table(bm, fmt) < 0) {
+		fprintf(stderr, "[E::%s] failed to set tabular output.\n", __func__);
+		return 1;
+	}
 	if (seekn >= 0) bgtm_set_start(bm, seekn);
-	if (aexpr) bgtm_set_alleles(bm, aexpr, vardb, dbfn);
-	for (i = 0; i < n_groups; ++i)
-		bgtm_add_group(bm, gexpr[i]);
+	if (aexpr) {
+		int n_al;
+		n_al = bgtm_set_alleles(bm, aexpr, vardb, dbfn);
+		if (n_al < 0) {
+			fprintf(stderr, "[E::%s] failed to set alleles.\n", __func__);
+			return 1;
+		} else if (n_al == 0)
+			fprintf(stderr, "[W::%s] no alleles selected.\n", __func__);
+	}
+	for (i = 0; i < n_groups; ++i) {
+		if (bgtm_add_group(bm, gexpr[i]) < 0) {
+			fprintf(stderr, "[E::%s] failed to add sample group '%s'.\n", __func__, gexpr[i]);
+			return 1;
+		}
+	}
 	bgtm_prepare(bm); // bgtm_prepare() generates the VCF header
 
 	if (!not_vcf) {

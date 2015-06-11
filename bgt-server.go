@@ -233,6 +233,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	max_read := 2147483647;
 	vcf_out := true;
 	bm := bgtm_reader_init(bgt_files);
+	defer C.bgtm_reader_destroy(bm);
 
 	if bgt_no_gt {
 		flag |= 2;
@@ -261,7 +262,6 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 		ret := int(C.bgtm_set_flt_site(bm, cstr));
 		C.free(unsafe.Pointer(cstr));
 		if ret != 0 {
-			C.bgtm_reader_destroy(bm);
 			http.Error(w, "400 Bad Request: failed to parse parameter 'f'", 400);
 			return;
 		}
@@ -271,13 +271,16 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 		ret := int(C.bgtm_set_region(bm, cstr));
 		C.free(unsafe.Pointer(cstr));
 		if ret < 0 {
-			C.bgtm_reader_destroy(bm);
 			http.Error(w, "400 Bad Request: failed to set region with parameter 'r'", 400);
 			return;
 		}
 	}
 	if len(r.Form["i"]) > 0 { // set start
 		i, _ := strconv.Atoi(r.Form["i"][0]);
+		if i < 1 {
+			http.Error(w, "400 Bad Request: failed to set start with parameter 'i'", 400);
+			return;
+		}
 		C.bgtm_set_start(bm, C.int64_t(i));
 	}
 	if len(r.Form["n"]) > 0 { // set max number of records to read
@@ -285,16 +288,19 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(r.Form["t"]) > 0 { // tabular output
 		cstr := C.CString(r.Form["t"][0]);
-		C.bgtm_set_table(bm, cstr);
+		ret := int(C.bgtm_set_table(bm, cstr));
 		C.free(unsafe.Pointer(cstr));
 		vcf_out = false;
+		if ret < 0 {
+			http.Error(w, "400 Bad Request: failed to parse tabular format with parameter 't'", 400);
+			return;
+		}
 	}
 	if len(r.Form["a"]) > 0 { // set alleles
 		cstr := C.CString(r.Form["a"][0]);
 		n_al := int(C.bgtm_set_alleles(bm, cstr, bgt_vardb, nil));
 		C.free(unsafe.Pointer(cstr));
 		if n_al <= 0 {
-			C.bgtm_reader_destroy(bm);
 			if n_al < 0 {
 				http.Error(w, "400 Bad Request: failed to retrieve alleles with parameter 'a'", 400);
 			} else {
@@ -361,8 +367,6 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 			C.free(unsafe.Pointer(s));
 		}
 	}
-
-	C.bgtm_reader_destroy(bm);
 
 	if n_read > max_read {
 		fmt.Fprintln(w, "*");
