@@ -184,7 +184,7 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w,  "   curl -s 'http://%s/?G&C&a=(impact==\"HIGH\")&s=(population==\"FIN\")&f=(AC>0)'\n\n", r.Host);
 	}
 	fmt.Fprintln(w, " * Tabular output: chromosome, 1-based start, end positions, REF, ALT alleles, total allele count and ALT count:\n");
-	fmt.Fprintf(w,  "   curl -s 'http://%s/?t=CHROM,POS,END,REF,ALT,AN,AC&r=11:200,000-300,000'\n\n", r.Host);
+	fmt.Fprintf(w,  "   curl -s 'http://%s/?t=CHROM,POS,END,REF,ALT,AC/AN&f=(AN>0)&r=11:200,000-300,000'\n\n", r.Host);
 	fmt.Fprintln(w, " * Samples in FIN that have three specified alleles:\n");
 	fmt.Fprintf(w,  "   curl -s 'http://%s/?a=,11:151344:1:G,11:110992:AACTT:A,11:160513::G&S&s=(population==\"FIN\")'\n\n", r.Host);
 	fmt.Fprintln(w, "Accepted Parameters");
