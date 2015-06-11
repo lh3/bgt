@@ -369,7 +369,7 @@ void bgtm_reader_destroy(bgtm_t *bm)
 
 int bgtm_add_group(bgtm_t *bm, const char *expr)
 {
-	int i, ret, size = 0;
+	int i, ret = 0, size = 0;
 	for (i = 0; i < bm->n_bgt; ++i)
 		if ((ret = bgt_add_group(bm->bgt[i], expr)) < 0) break;
 		else size += ret;
