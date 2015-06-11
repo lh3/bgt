@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"path"
+	"time"
 )
 
 /*
@@ -226,6 +227,9 @@ func bgs_replace_op(t string) string {
 func bgs_query(w http.ResponseWriter, r *http.Request) {
 	r.URL.RawQuery = strings.Replace(r.URL.RawQuery, "&&", ".AND.", -1);
 	r.ParseForm();
+	start_time := time.Now().UnixNano();
+	fmt.Fprintf(os.Stderr, "[%d] got request: %s\n", start_time, r.Form);
+	defer fmt.Fprintf(os.Stderr, "[%d] responded %d\n", time.Now().UnixNano(), start_time);
 	if len(r.Form) == 0 {
 		bgs_help(w, r);
 		return;
@@ -428,7 +432,9 @@ func main() {
 	bgt_files, bgt_prefix = bgtm_open(os.Args[optind:]);
 	defer bgtm_close(bgt_files);
 
+	fmt.Fprintf(os.Stderr, "[%d] launched at port %s\n", time.Now().UnixNano(), bgt_port);
+	defer fmt.Fprintf(os.Stderr, "[%d] exited\n", time.Now().UnixNano()); // currently, these are not executed
+
 	http.HandleFunc("/", bgs_query);
-	fmt.Fprintln(os.Stderr, "MESSAGE: server started...");
 	http.ListenAndServe(fmt.Sprintf(":%s", bgt_port), nil);
 }
