@@ -167,8 +167,8 @@ int main_view(int argc, char *argv[])
 		}
 		if (bm->flag & BGT_F_CNT_AL) {
 			char *s;
-			s = bgtm_alcnt_print(bm);
-			fputs(s, stdout);
+			if ((s = bgtm_alcnt_print(bm)) != 0)
+				fputs(s, stdout);
 			free(s);
 		}
 	}
