@@ -124,6 +124,7 @@ var bgt_file_names []string;
 var bgt_port string = "8000";
 var bgt_max_gt uint64 = uint64(10000000);
 var bgt_no_gt bool = false;
+var bgt_min_group int = 0;
 
 func bgtm_open(fns []string) ([](*C.bgt_file_t), []string) {
 	files := make([](*C.bgt_file_t), len(fns));
@@ -236,8 +237,13 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	defer C.bgtm_reader_destroy(bm);
 
 	{ // set flag
-		if len(r.Form["g"]) > 0 && !bgt_no_gt {
-			flag &= 0xffff - 2;
+		if len(r.Form["g"]) > 0 {
+			if bgt_no_gt {
+				http.Error(w, "403 Forbidden: this server doesn't support genotype output", 403);
+				return;
+			} else {
+				flag &= 0xffff - 2;
+			}
 		}
 		if len(r.Form["C"]) > 0 || len(r.Form["s"]) > 0 {
 			flag |= 1; // BGT_F_SET_AC
@@ -308,10 +314,13 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	if len(r.Form["s"]) > 0 { // set sample groups
 		for _, s := range r.Form["s"] {
 			cstr := C.CString(bgs_replace_op(s));
-			ret := C.bgtm_add_group(bm, cstr);
+			ret := int(C.bgtm_add_group(bm, cstr));
 			C.free(unsafe.Pointer(cstr));
 			if ret < 0 {
 				http.Error(w, "400 Bad Request: failed to set sample group with parameter 's'", 400);
+				return;
+			} else if ret < bgt_min_group {
+				http.Error(w, fmt.Sprintf("403 Forbidden: this server disallows creating a sample group smaller than %d", bgt_min_group), 403);
 				return;
 			}
 		}
@@ -384,7 +393,7 @@ func bgs_fmf_keys(f *C.fmf_t) ([]string) {
 func main() {
 	// parse command line options
 	for {
-		opt, arg := getopt(os.Args, "d:p:m:G");
+		opt, arg := getopt(os.Args, "d:p:m:Gg:");
 		if opt == 'p' {
 			bgt_port = arg;
 		} else if opt == 'm' {
@@ -395,6 +404,11 @@ func main() {
 			C.free(unsafe.Pointer(cstr));
 		} else if opt == 'G' {
 			bgt_no_gt = true;
+		} else if opt == 'g' {
+			bgt_min_group, _ = strconv.Atoi(arg);
+			if bgt_min_group > 0 {
+				bgt_no_gt = true;
+			}
 		} else if opt < 0 {
 			break;
 		}
@@ -405,6 +419,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -p INT    port number [%s]\n", bgt_port);
 		fmt.Fprintf(os.Stderr, "  -m INT    maximal genotypes processed per query [%d]\n", bgt_max_gt);
 		fmt.Fprintf(os.Stderr, "  -d FILE   variant annotations in the FMF format []\n");
+		fmt.Fprintf(os.Stderr, "  -g INT    minimal sample group size (force -G if positive) [0]\n");
 		fmt.Fprintf(os.Stderr, "  -G        disallow clients to retrieve individual genotypes\n");
 		os.Exit(1);
 	}

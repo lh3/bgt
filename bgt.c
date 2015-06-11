@@ -101,12 +101,14 @@ void bgt_reader_destroy(bgt_t *bgt)
 
 int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr)
 {
-	int i;
+	int i, size = 0;
 	const fmf_t *f = bgt->f->f;
 
 	if (n == BGT_SET_ALL_SAMPLES) {
 		for (i = 0; i < f->n_rows; ++i)
 			bgt->flag[i] |= 1<<bgt->n_groups;
+		size = f->n_rows;
+		++bgt->n_groups;
 	} else if (n > 0 || expr != 0) {
 		int err, absent;
 		khash_t(s2i) *h;
@@ -123,14 +125,14 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 		h = kh_init(s2i);
 		for (i = 0; i < n; ++i)
 			kh_put(s2i, h, samples[i], &absent);
-		for (i = 0; i < f->n_rows; ++i)
+		for (i = 0, size = 0; i < f->n_rows; ++i)
 			if ((kh_get(s2i, h, f->rows[i].name) != kh_end(h)) || (ke && fmf_test(f, i, ke)))
-				bgt->flag[i] |= 1<<bgt->n_groups;
+				++size, bgt->flag[i] |= 1<<bgt->n_groups;
 		kh_destroy(s2i, h);
 		ke_destroy(ke);
-	}
-	++bgt->n_groups;
-	return 0;
+		++bgt->n_groups;
+	} else return -1;
+	return size;
 }
 
 static int bgt_is_file(const char *fn)
@@ -367,12 +369,12 @@ void bgtm_reader_destroy(bgtm_t *bm)
 
 int bgtm_add_group(bgtm_t *bm, const char *expr)
 {
-	int i, ret = 0;
+	int i, ret, size = 0;
 	for (i = 0; i < bm->n_bgt; ++i)
-		if ((ret = bgt_add_group(bm->bgt[i], expr)) < 0)
-			break;
-	if (ret == 0) ++bm->n_groups;
-	return ret;
+		if ((ret = bgt_add_group(bm->bgt[i], expr)) < 0) break;
+		else size += ret;
+	if (i == bm->n_bgt) ++bm->n_groups; // TODO: revert bm->bgt[i]->n_groups
+	return i == bm->n_bgt? size : ret;
 }
 
 int bgtm_set_region(bgtm_t *bm, const char *reg)
