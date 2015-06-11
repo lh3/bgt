@@ -349,7 +349,7 @@ int pbf_seek(pbf_t *pb, uint64_t k)
 		if (pb->n_sub > 0 && pb->n_sub < pb->m) // update pb->sub if needed
 			pbf_fill_sub(pb->m, pb->pb[g]->S, pb->n_sub, pb->sub[g], pb->invS);
 	}
-	pb->n = k >> pb->shift << pb->shift;
+	pb->k = k >> pb->shift << pb->shift;
 	x = k & ((1<<pb->shift) - 1);
 	for (i = 0; i < x; ++i) pbf_read(pb);
 	return 0;
