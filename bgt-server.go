@@ -7,6 +7,7 @@ import (
 	"unsafe"
 	"strconv"
 	"strings"
+	"path"
 )
 
 /*
@@ -47,6 +48,8 @@ char *bgtm_hapcnt2str(const bgtm_t *bm)
 	hc = bgtm_hapcnt(bm, &n_hap);
 	return bgtm_hapcnt_print_destroy(bm, n_hap, hc);
 }
+
+char *bgs_get_str(char **s, int i) { return s[i]; }
 */
 import "C"
 
@@ -115,19 +118,23 @@ func getopt(args []string, ostr string) (int, string) {
  ****************/
 
 var bgt_files [](*C.bgt_file_t);
+var bgt_prefix []string;
 var bgt_vardb *C.fmf_t = nil;
 var bgt_file_names []string;
-var bgt_port string = ":8000";
-var bgt_max_gt uint64 = uint64(1000000);
+var bgt_port string = "8000";
+var bgt_max_gt uint64 = uint64(10000000);
+var bgt_no_gt bool = false;
 
-func bgtm_open(fns []string) ([](*C.bgt_file_t)) {
+func bgtm_open(fns []string) ([](*C.bgt_file_t), []string) {
 	files := make([](*C.bgt_file_t), len(fns));
+	prefix := make([]string, len(fns));
 	for i := 0; i < len(fns); i += 1 {
 		cstr := C.CString(fns[i]);
 		defer C.free(unsafe.Pointer(cstr));
 		files[i] = C.bgt_open(cstr);
+		prefix[i] = path.Base(fns[i]);
 	}
-	return files;
+	return files, prefix;
 }
 
 func bgtm_close(files [](*C.bgt_file_t)) {
@@ -163,6 +170,10 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	max_read := 2147483647;
 	vcf_out := true;
 	bm := bgtm_reader_init(bgt_files);
+
+	if bgt_no_gt {
+		flag |= 2;
+	}
 
 	{ // set flag
 		if len(r.Form["G"]) > 0 {
@@ -295,12 +306,48 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func bgs_fmf_keys(f *C.fmf_t) ([]string) {
+	s := make([]string, int(f.n_keys));
+	for i := 0; i < int(f.n_keys); i += 1 {
+		s[i] = C.GoString(C.bgs_get_str(f.keys, C.int(i)));
+	}
+	return s;
+}
+
 func bgs_help(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Manual");
-	fmt.Fprintln(w, "======\n");
-	fmt.Fprintln(w, "The BGT server has a similar interface to 'bgt view'. Query examples:\n");
-	fmt.Fprintf(w,  "  curl --data 's=(population==\"FIN\")&s=(population==\"CEU\")&G&f=(AC1>0.and.AC2>0)' 0.0.0.0%s/query\n", bgt_port);
-	fmt.Fprintf(w,  "  curl --data 'a=,11:151344:1:G,11:110992:AACTT:A,11:160513::G&S&s=(population==\"FIN\")' 0.0.0.0%s/query\n\n", bgt_port);
+	fmt.Fprintln(w, "Server Configuration");
+	fmt.Fprintln(w, "====================\n");
+	fmt.Fprintln(w, "The following configurations were set when the server was launched. Clients can't override them.\n");
+	fmt.Fprintln(w, " * BGT file prefix(es) and queryable sample annotations:");
+	for i := 0; i < len(bgt_files); i += 1 {
+		fmt.Fprintf(w, "   - %s: %s\n", bgt_prefix[i], bgs_fmf_keys(bgt_files[i].f));
+	}
+	fmt.Fprint(w, "\n");
+	if bgt_vardb != nil {
+		fmt.Fprintf(w, " * Queryable variant annotations: %s\n\n", bgs_fmf_keys(bgt_vardb));
+	} else {
+		fmt.Fprintf(w, " * No variant annotations specified.\n\n");
+	}
+	if bgt_no_gt {
+		fmt.Fprintf(w, " * This server doesn't report individual genotypes.\n\n");
+	} else {
+		fmt.Fprintf(w, " * This server may report individual genotypes.\n\n");
+	}
+	fmt.Fprintf(w,  " * Maximal genotypes processed internally per query: %d\n\n", bgt_max_gt);
+	fmt.Fprintln(w, "Example Queries");
+	fmt.Fprintln(w, "===============\n");
+	fmt.Fprintln(w, " * Variants present in both FIN and CEU populations (.and. represents the logical AND operator):\n");
+	fmt.Fprintf(w,  "   curl -s 'http://%s/query?G&s=(population==\"FIN\")&s=(population==\"CEU\")&f=(AC1>0.and.AC2>0)'\n\n", r.Host);
+	if bgt_vardb != nil {
+		fmt.Fprintln(w, " * HIGH impact variants in the FIN population:\n");
+		fmt.Fprintf(w,  "   curl -s 'http://%s/query?G&C&a=(impact==\"HIGH\")&s=(population==\"FIN\")&f=(AC>0)'\n\n", r.Host);
+	}
+	fmt.Fprintln(w, " * Tabular output: chromosome, 1-based start, end positions, REF, ALT alleles, total allele count and ALT count:\n");
+	fmt.Fprintf(w,  "   curl -s 'http://%s/query?t=CHROM,POS,END,REF,ALT,AN,AC&r=11:200,000-300,000'\n\n", r.Host);
+	fmt.Fprintln(w, " * Samples in FIN that have three specified alleles:\n");
+	fmt.Fprintf(w,  "   curl -s 'http://%s/query?a=,11:151344:1:G,11:110992:AACTT:A,11:160513::G&S&s=(population==\"FIN\")'\n\n", r.Host);
+	fmt.Fprintln(w, "Accepted Parameters");
+	fmt.Fprintln(w, "===================\n");
 	fmt.Fprintln(w, "Sample selection parameter:\n");
 	fmt.Fprintln(w, "  s EXPR  List of samples in a comma-leading comma-separate list (e.g. ,sample1,sample2) or an");
 	fmt.Fprintln(w, "          expression (e.g. s=population==\"FIN\"). There can be multiple 's' parameters. Each of");
@@ -315,7 +362,9 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "  f EXPR  Filters on per sample group allele counts. EXPR could include AC (primary allele count),");
 	fmt.Fprintln(w, "          AN (total called alleles), AC# (primary allele count of the #-th sample group) and AN#.\n");
 	fmt.Fprintln(w, "VCF output parameters:\n");
-	fmt.Fprintln(w, "  G       Don't output sample genotypes\n");
+	if !bgt_no_gt {
+		fmt.Fprintln(w, "  G       Don't output sample genotypes\n");
+	}
 	fmt.Fprintln(w, "  C       Output AC and AN VCF INFO fields. This parameter is automatically set if 's' is applied.\n");
 	fmt.Fprintln(w, "Non-VCF output parameters:\n");
 	fmt.Fprintln(w, "  S       Output samples having requested alleles (requiring parameter 'a')\n");
@@ -331,29 +380,36 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// parse command line options
 	for {
-		opt, arg := getopt(os.Args, "d:p:m:");
+		opt, arg := getopt(os.Args, "d:p:m:G");
 		if opt == 'p' {
-			bgt_port = fmt.Sprintf(":%s", arg);
+			bgt_port = arg;
 		} else if opt == 'm' {
 			bgt_max_gt, _ = strconv.ParseUint(arg, 10, 64);
 		} else if opt == 'd' {
 			cstr := C.CString(arg);
 			bgt_vardb = C.fmf_read(cstr);
 			C.free(unsafe.Pointer(cstr));
+		} else if opt == 'G' {
+			bgt_no_gt = true;
 		} else if opt < 0 {
 			break;
 		}
 	}
 	if optind == len(os.Args) {
 		fmt.Fprintln(os.Stderr, "Usage: bgt-server [options] <bgt.pre1> [...]");
+		fmt.Fprintln(os.Stderr, "Options:");
+		fmt.Fprintf(os.Stderr, "  -p INT    port number [%s]\n", bgt_port);
+		fmt.Fprintf(os.Stderr, "  -m INT    maximal genotypes processed per query [%d]\n", bgt_max_gt);
+		fmt.Fprintf(os.Stderr, "  -d FILE   variant annotations in the FMF format []\n");
+		fmt.Fprintf(os.Stderr, "  -G        disallow clients to retrieve individual genotypes\n");
 		os.Exit(1);
 	}
 
-	bgt_files = bgtm_open(os.Args[optind:]);
+	bgt_files, bgt_prefix = bgtm_open(os.Args[optind:]);
 	defer bgtm_close(bgt_files);
 
 	http.HandleFunc("/", bgs_help);
 	http.HandleFunc("/query", bgs_query);
 	fmt.Fprintln(os.Stderr, "MESSAGE: server started...");
-	http.ListenAndServe(bgt_port, nil);
+	http.ListenAndServe(fmt.Sprintf(":%s", bgt_port), nil);
 }
