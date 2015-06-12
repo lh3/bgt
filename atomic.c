@@ -29,7 +29,7 @@ static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 	eq = (int*)alloca(n * sizeof(int));
 	ks_introsort(atom, n, a);
 	for (i = 1, eq[0] = 0; i < n; ++i) {
-		eq[i] = bcf_atom_cmp(&a[i-1], &a[i])? i : eq[i-1];
+		eq[i] = bcf_atom_cmp(&a[i-1], &a[i])? i : eq[i-1]; // eq[k] points to the smallest allele that is the same as allele k
 		if (eq[i] == eq[i-1]) has_dup = 1;
 	}
 
@@ -41,8 +41,9 @@ static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 		if (eq[k] != k) continue; // duplicated atom
 		if (!ak->from_new) continue;
 		ak->has_multi = 0;
-		for (i = 1; i < b->n_allele; ++i) tr[i] = 0;
+		for (i = 1; i < b->n_allele; ++i) tr[i] = 0; // tr[] translates allele number in BCF to the 4-value allele number
 		for (i = 0; i < n; ++i) { // WARNING: quadratic in the number of atoms
+			if (!a[i].from_new) continue;
 			if (eq[i] == eq[k]) // identical allele
 				tr[a[i].anum] = 1;
 			else if (a[i].pos < ak->pos + ak->rlen && ak->pos < a[i].pos + a[i].rlen) // overlap
