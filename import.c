@@ -29,19 +29,19 @@ int main_import(int argc, char *argv[])
 		}
 	}
 	if (argc - optind < 2) {
-		fprintf(stderr, "Usage: bgt import [options] <in.bcf>|<in.vcf>|<in.vcf.gz> <out-prefix>\n");
+		fprintf(stderr, "Usage: bgt import [options] <out-prefix> <in.bcf>|<in.vcf>|<in.vcf.gz>\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -S           input is VCF\n");
 		fprintf(stderr, "  -t FILE      list of reference names and lengths [null]\n");
 		fprintf(stderr, "  -F           keep filtered variants\n");
 		return 1;
 	}
-	prefix = argv[optind+1];
+	prefix = argv[optind];
 	fn = (char*)malloc(strlen(prefix) + 9);
 	strcpy(moder, "r");
 	if ((flag&1) == 0) strcat(moder, "b");
 
-	in = hts_open(argv[optind], moder, fn_ref);
+	in = hts_open(argv[optind+1], moder, fn_ref);
 	assert(in);
 	ab = bcf_atombuf_init(in, flag&4);
 	assert(ab->h->n[BCF_DT_SAMPLE] > 0);
