@@ -7,14 +7,13 @@
 
 int main_import(int argc, char *argv[])
 {
-	int i, c, clevel = -1, flag = 0, id_GT = -1;
+	int i, j, c, clevel = -1, flag = 0, id_GT = -1;
 	char *fn_ref = 0, moder[8], modew[8];
 	char *prefix, *fn;
 	uint8_t *bits[2], *bit1;
 	int64_t n = 0;
 	htsFile *in, *out;
 	bcf_hdr_t *h0;
-	bcf1_t *b;
 	FILE *fp;
 	pbf_t *pb, *pb1;
 	bcf_atombuf_t *ab;
@@ -73,37 +72,43 @@ int main_import(int argc, char *argv[])
 	pb1 = pbf_open_w(fn, ab->h->n[BCF_DT_SAMPLE]*2, 1, 13);
 	bit1 = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
 
+	// write site-only BCF header
 	strcpy(modew, "wb");
 	if (clevel >= 0 && clevel <= 9) sprintf(modew + 2, "%d", clevel);
 	sprintf(fn, "%s.bcf", prefix);
 	out = hts_open(fn, modew, 0);
 	vcf_hdr_write(out, h0);
-	b = bcf_init1();
 
-	while ((a = bcf_atom_read(ab)) != 0) {
-		int32_t i, val = n;
-		bcf_atom2bcf(a, b, 1, -1);
-		bcf_append_info_ints(h0, b, "_row", 1, &val);
-		for (i = 0; i < a->n_gt; ++i) {
-			bits[0][i] = a->gt[i]&1, bits[1][i] = a->gt[i]>>1&1;
-			bit1[i] = (a->gt[i] == 1);
+	for (j = optind + 1; j < argc; ++j) {
+		bcf1_t *b;
+		if (j != optind + 1) { // the first file has already been opened
+			in = hts_open(argv[j], moder, fn_ref);
+			ab = bcf_atombuf_init(in, flag&4);
 		}
-		pbf_write(pb, bits);
-		pbf_write(pb1, &bit1);
-		bcf_subset(h0, b, 0, 0);
-		vcf_write1(out, h0, b);
-		++n;
+		b = bcf_init1();
+		while ((a = bcf_atom_read(ab)) != 0) {
+			int32_t i, val = n;
+			bcf_atom2bcf(a, b, 1, -1);
+			bcf_append_info_ints(h0, b, "_row", 1, &val);
+			for (i = 0; i < a->n_gt; ++i) {
+				bits[0][i] = a->gt[i]&1, bits[1][i] = a->gt[i]>>1&1;
+				bit1[i] = (a->gt[i] == 1);
+			}
+			pbf_write(pb, bits);
+			pbf_write(pb1, &bit1);
+			bcf_subset(h0, b, 0, 0);
+			vcf_write1(out, h0, b);
+			++n;
+		}
+		bcf_destroy1(b);
+		bcf_atombuf_destroy(ab);
+		hts_close(in);
 	}
 
-	bcf_destroy1(b);
 	hts_close(out);
-
 	pbf_close(pb1); free(bit1);
 	pbf_close(pb);  free(bits[0]); free(bits[1]);
-
 	bcf_hdr_destroy(h0);
-	bcf_atombuf_destroy(ab);
-	hts_close(in);
 
 	bcf_index_build(fn, 14);
 	free(fn);
