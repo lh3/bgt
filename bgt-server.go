@@ -124,7 +124,6 @@ var bgt_vardb *C.fmf_t = nil;
 var bgt_file_names []string;
 var bgt_port string = "8000";
 var bgt_max_gt uint64 = uint64(10000000);
-var bgt_no_gt bool = false;
 var bgt_min_group int = 0;
 
 func bgtm_open(fns []string) ([](*C.bgt_file_t), []string) {
@@ -171,11 +170,7 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 	} else {
 		fmt.Fprintf(w, " * No variant annotations specified.\n\n");
 	}
-	if bgt_no_gt {
-		fmt.Fprintf(w, " * This server doesn't report individual genotypes.\n\n");
-	} else {
-		fmt.Fprintf(w, " * This server may report individual genotypes.\n\n");
-	}
+	fmt.Fprintf(w, " * This server may report individual genotypes.\n\n");
 	fmt.Fprintf(w,  " * Maximal genotypes processed internally per query: %d\n\n", bgt_max_gt);
 	fmt.Fprintln(w, "Example Queries");
 	fmt.Fprintln(w, "===============\n");
@@ -205,9 +200,7 @@ func bgs_help(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "  f EXPR  Filters on per sample group allele counts. EXPR could include AC (primary allele count),");
 	fmt.Fprintln(w, "          AN (total called alleles), AC# (primary allele count of the #-th sample group) and AN#.\n");
 	fmt.Fprintln(w, "VCF output parameters:\n");
-	if !bgt_no_gt {
-		fmt.Fprintln(w, "  g       Output sample genotypes\n");
-	}
+	fmt.Fprintln(w, "  g       Output sample genotypes\n");
 	fmt.Fprintln(w, "  C       Output AC and AN VCF INFO fields. This parameter is automatically set if 's' is applied.\n");
 	fmt.Fprintln(w, "Non-VCF output parameters:\n");
 	fmt.Fprintln(w, "  S       Output samples having requested alleles (requiring parameter 'a')\n");
@@ -239,15 +232,11 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 	vcf_out := true;
 	bm := bgtm_reader_init(bgt_files);
 	defer C.bgtm_reader_destroy(bm);
+	C.bgtm_set_mgs(bm, C.int(bgt_min_group));
 
 	{ // set flag
 		if len(r.Form["g"]) > 0 {
-			if bgt_no_gt {
-				http.Error(w, "403 Forbidden: this server doesn't support genotype output", 403);
-				return;
-			} else {
-				flag &= 0xffff - 2;
-			}
+			flag &= 0xffff - 2;
 		}
 		if len(r.Form["C"]) > 0 || len(r.Form["s"]) > 0 {
 			flag |= 1; // BGT_F_SET_AC
@@ -323,13 +312,14 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 			if ret < 0 {
 				http.Error(w, "400 Bad Request: failed to set sample group with parameter 's'", 400);
 				return;
-			} else if ret < bgt_min_group {
-				http.Error(w, fmt.Sprintf("403 Forbidden: this server disallows creating a sample group smaller than %d", bgt_min_group), 403);
-				return;
 			}
 		}
 	}
 	C.bgtm_prepare(bm);
+	if int(C.bgtm_test_mgs(bm)) == 0 {
+		http.Error(w, "403 Forbidden: genotype summary can't be computed for small sample groups", 403);
+		return;
+	}
 
 	// print header if necessary
 	if vcf_out {
@@ -397,7 +387,7 @@ func bgs_fmf_keys(f *C.fmf_t) ([]string) {
 func main() {
 	// parse command line options
 	for {
-		opt, arg := getopt(os.Args, "d:p:m:Gg:");
+		opt, arg := getopt(os.Args, "d:p:m:g:");
 		if opt == 'p' {
 			bgt_port = arg;
 		} else if opt == 'm' {
@@ -406,13 +396,8 @@ func main() {
 			cstr := C.CString(arg);
 			bgt_vardb = C.fmf_read(cstr);
 			C.free(unsafe.Pointer(cstr));
-		} else if opt == 'G' {
-			bgt_no_gt = true;
 		} else if opt == 'g' {
 			bgt_min_group, _ = strconv.Atoi(arg);
-			if bgt_min_group > 0 {
-				bgt_no_gt = true;
-			}
 		} else if opt < 0 {
 			break;
 		}
@@ -424,7 +409,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -m INT    maximal genotypes processed per query [%d]\n", bgt_max_gt);
 		fmt.Fprintf(os.Stderr, "  -d FILE   variant annotations in the FMF format []\n");
 		fmt.Fprintf(os.Stderr, "  -g INT    minimal sample group size (force -G if positive) [0]\n");
-		fmt.Fprintf(os.Stderr, "  -G        disallow clients to retrieve individual genotypes\n");
 		os.Exit(1);
 	}
 

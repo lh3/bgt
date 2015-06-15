@@ -17,9 +17,27 @@ void *bed_read(const char *fn);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 void bed_destroy(void *_h);
 
+void ks_introsort_uint64_t(size_t n, uint64_t a[]);
+
 /************
  * BGT file *
  ************/
+
+static void bgt_set_mgs(bgt_file_t *bf)
+{
+	int i, j, mgs_id;
+	for (i = 0; i < bf->f->n_rows; ++i) bf->mgs[i] = -1;
+	for (i = 0; i < bf->f->n_keys; ++i)
+		if (strcmp(bf->f->keys[i], "_mgs") == 0) break;
+	if (i == bf->f->n_keys) return;
+	mgs_id = i;
+	for (i = 0; i < bf->f->n_rows; ++i) {
+		fmf1_t *r = &bf->f->rows[i];
+		for (j = 0; j < r->n_meta; ++j)
+			if (r->meta[j].key == mgs_id && r->meta[j].type == FMF_INT && r->meta[j].v.i >= 0)
+				bf->mgs[i] = r->meta[j].v.i;
+	}
+}
 
 bgt_file_t *bgt_open(const char *prefix)
 {
@@ -42,6 +60,8 @@ bgt_file_t *bgt_open(const char *prefix)
 	bf->prefix = strdup(prefix);
 	bgzf_close(fp);
 	free(fn);
+	bf->mgs = (int32_t*)calloc(bf->f->n_rows, 4);
+	bgt_set_mgs(bf);
 	return bf;
 
 bgt_open_err:
@@ -54,6 +74,7 @@ bgt_open_err:
 void bgt_close(bgt_file_t *bf)
 {
 	if (bf == 0) return;
+	free(bf->mgs);
 	if (bf->idx) hts_idx_destroy(bf->idx);
 	if (bf->h0) bcf_hdr_destroy(bf->h0);
 	if (bf->f) fmf_destroy(bf->f);
@@ -125,9 +146,15 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 		h = kh_init(s2i);
 		for (i = 0; i < n; ++i)
 			kh_put(s2i, h, samples[i], &absent);
-		for (i = 0, size = 0; i < f->n_rows; ++i)
-			if ((kh_get(s2i, h, f->rows[i].name) != kh_end(h)) || (ke && fmf_test(f, i, ke)))
-				++size, bgt->flag[i] |= 1<<bgt->n_groups;
+		for (i = 0, size = 0; i < f->n_rows; ++i) {
+			int to_add = 0;
+			if (ke && fmf_test(f, i, ke)) to_add = 1;
+			if (kh_get(s2i, h, f->rows[i].name) != kh_end(h)) {
+				int mgs = bgt->f->mgs[i] >= 0? bgt->f->mgs[i] : bgt->mgs_def;
+				if (mgs == 1) to_add = 1;
+			}
+			if (to_add) ++size, bgt->flag[i] |= 1<<bgt->n_groups;
+		}
 		kh_destroy(s2i, h);
 		ke_destroy(ke);
 		++bgt->n_groups;
@@ -261,17 +288,28 @@ int bgt_read_core0(bgt_t *bgt)
 	return row;
 }
 
-void bgt_gen_gt(const bcf_hdr_t *h, bcf1_t *b, int m, const uint8_t **a)
+void bgt_gen_gt(const bcf_hdr_t *h, bcf1_t *b, int m, const uint8_t **a, int32_t *mgs)
 {
-	int id, i;
-	id = bcf_id2int(h, BCF_DT_ID, "GT");
-	b->n_fmt = 1; b->n_sample = m;
+	int id, i, m2 = m;
 	b->indiv.l = 0;
+	if (mgs) {
+		for (i = m2 = 0; i < m; ++i)
+			m2 += (mgs[i] <= 1);
+		if (m2 == 0) return;
+	}
+	id = bcf_id2int(h, BCF_DT_ID, "GT");
+	b->n_fmt = 1; b->n_sample = m2;
 	bcf_enc_int1(&b->indiv, id);
 	bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
 	ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
-	for (i = 0; i < b->n_sample<<1; ++i)
-		b->indiv.s[b->indiv.l++] = bgt_bits2gt[a[1][i]<<1 | a[0][i]];
+	if (mgs) {
+		for (i = 0; i < m<<1; ++i)
+			if (mgs[i>>1] <= 1)
+				b->indiv.s[b->indiv.l++] = bgt_bits2gt[a[1][i]<<1 | a[0][i]];
+	} else {
+		for (i = 0; i < m<<1; ++i)
+			b->indiv.s[b->indiv.l++] = bgt_bits2gt[a[1][i]<<1 | a[0][i]];
+	}
 	b->indiv.s[b->indiv.l] = 0;
 }
 
@@ -314,7 +352,7 @@ int bgt_read(bgt_t *bgt, bcf1_t *b)
 	if (bgt->h_out == 0) bgt_prepare(bgt);
 	if ((ret = bgt_read_rec(bgt, &r)) < 0) return ret;
 	bcfcpy(b, r.b0);
-	bgt_gen_gt(bgt->h_out, b, bgt->n_out, r.a);
+	bgt_gen_gt(bgt->h_out, b, bgt->n_out, r.a, 0);
 	return ret;
 }
 
@@ -343,6 +381,7 @@ void bgtm_reader_destroy(bgtm_t *bm)
 	free(bm->hap);
 	free(bm->alcnt);
 	if (bm->site_flt) ke_destroy(bm->site_flt);
+	free(bm->mgs);
 	free(bm->group);
 	free(bm->sample_idx);
 	if (bm->h_out) bcf_hdr_destroy(bm->h_out);
@@ -413,6 +452,14 @@ int bgtm_set_flt_site(bgtm_t *bm, const char *expr)
 		bm->site_flt = 0;
 		return err;
 	}
+	return 0;
+}
+
+int bgtm_set_mgs(bgtm_t *bm, int mgs_def)
+{
+	int i;
+	for (i = 0; i < bm->n_bgt; ++i) bm->bgt[i]->mgs_def = mgs_def;
+	bm->mgs_def = mgs_def;
 	return 0;
 }
 
@@ -548,28 +595,34 @@ int bgtm_set_table(bgtm_t *bm, const char *fmt)
 
 /*** prepare for the output ***/
 
-void bgtm_prepare(bgtm_t *bm)
+int bgtm_prepare(bgtm_t *bm)
 {
 	int i, j, m;
 	kstring_t h = {0,0,0};
 	bcf_hdr_t *h0;
 
-	if (bm->n_bgt == 0) return;
+	if (bm->n_bgt == 0) return 0;
 
 	// prepare group and sample_idx
 	for (i = bm->n_out = 0; i < bm->n_bgt; ++i) {
 		bgt_prepare(bm->bgt[i]);
 		bm->n_out += bm->bgt[i]->n_out;
 	}
+	bm->mgs = (int32_t*)realloc(bm->mgs, bm->n_out * 4);
 	bm->group = (uint32_t*)realloc(bm->group, bm->n_out * 4);
 	bm->sample_idx = (uint64_t*)realloc(bm->sample_idx, bm->n_out * 8);
 	for (i = m = 0; i < bm->n_bgt; ++i) {
+		bgt_t *bgt = bm->bgt[i];
 		for (j = 0; j < bm->bgt[i]->n_out; ++j) {
-			bm->sample_idx[m] = (uint64_t)i<<32 | bm->bgt[i]->out[j];
-			bm->group[m++] = bm->n_groups? bm->bgt[i]->group[j] : 1;
+			bm->sample_idx[m] = (uint64_t)i<<32 | bgt->out[j];
+			bm->group[m] = bm->n_groups? bgt->group[j] : 1;
+			bm->mgs[m++] = bgt->f->mgs[bgt->out[j]] >= 0? bgt->f->mgs[bgt->out[j]] : bm->mgs_def;
 		}
 	}
 	if (bm->n_groups == 0) bm->n_groups = 1;
+	for (i = m = 0; i < bm->n_out; ++i)
+		if (bm->mgs[i] <= 1) ++m;
+	if (m == 0) bm->flag |= BGT_F_NO_GT;
 
 	// prepare header
 	h0 = bm->bgt[0]->f->h0; // FIXME: test if headers are consistent
@@ -595,9 +648,10 @@ void bgtm_prepare(bgtm_t *bm)
 	kputs("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO", &h);
 	if (!(bm->flag & BGT_F_NO_GT)) {
 		kputs("\tFORMAT", &h);
-		for (i = 0; i < bm->n_bgt; ++i) {
+		for (i = m = 0; i < bm->n_bgt; ++i) {
 			bgt_t *bgt = bm->bgt[i];
 			for (j = 0; j < bgt->n_out; ++j) {
+				if (bm->mgs[m++] > 1) continue;
 				kputc('\t', &h);
 				kputs(bgt->f->f->rows[bgt->out[j]].name, &h);
 			}
@@ -619,6 +673,31 @@ void bgtm_prepare(bgtm_t *bm)
 			bm->hap = (uint64_t*)calloc(bm->n_out<<1, 8);
 		bm->aal = (bgt_allele_t*)calloc(kh_size((khash_t(str)*)bm->h_al) * 2, sizeof(bgt_allele_t));
 	}
+	return 0;
+}
+
+int bgtm_test_mgs(const bgtm_t *bm)
+{
+	int n = bm->n_out, i, j, start;
+	uint64_t *x, last = 0;
+	const uint32_t *group = bm->group;
+	const int32_t *mgs = bm->mgs;
+	x = (uint64_t*)calloc(n, 8);
+	for (i = 0; i < n; ++i)
+		x[i] = (uint64_t)group[i]<<32 | mgs[i];
+	ks_introsort_uint64_t(n, x);
+	last = x[0]>>32, start = 0;
+	for (i = 1; i <= n; ++i) {
+		if (i == n || x[i]>>32 != last) {
+			for (j = start; j < i; ++j)
+				if ((uint32_t)x[j] > i - start)
+					break;
+			if (j != i) break;
+			start = i;
+		}
+	}
+	free(x);
+	return (i > n);
 }
 
 /*** read into BCF ***/
@@ -832,7 +911,7 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
 	if (bm->h_out == 0) bgtm_prepare(bm);
 	while ((ret = bgtm_read_core(bm, b)) > 0);
 	if ((bm->flag & BGT_F_NO_GT) == 0)
-		bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a);
+		bgt_gen_gt(bm->h_out, b, bm->n_out, (const uint8_t**)bm->a, bm->mgs);
 	return ret;
 }
 
@@ -904,6 +983,7 @@ char *bgtm_alcnt_print(const bgtm_t *bm)
 	for (i = 0; i < bm->n_out; ++i) {
 		if (bm->alcnt[i] == bm->n_aal) {
 			bgt_t *bgt = bm->bgt[bm->sample_idx[i]>>32];
+			if (bm->mgs[i] > 1) continue;
 			ksprintf(&s, "SP\t%s\t%d\n", bgt->f->f->rows[(uint32_t)bm->sample_idx[i]].name, (int)(bm->sample_idx[i]>>32) + 1);
 		}
 	}

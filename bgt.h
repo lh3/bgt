@@ -20,6 +20,7 @@ typedef struct {
 	fmf_t *f;
 	bcf_hdr_t *h0; // site-only BCF header
 	hts_idx_t *idx; // BCF index
+	int32_t *mgs;
 } bgt_file_t;
 
 typedef struct {
@@ -29,7 +30,7 @@ typedef struct {
 	bcf1_t *b0; // site-only BCF record
 	hts_itr_t *itr;
 	const void *bed;
-	int bed_excl, n_out, n_groups, *out;
+	int bed_excl, n_out, n_groups, mgs_def, *out;
 	uint32_t *group, *flag;
 	bcf_hdr_t *h_out;
 	const void *h_al; // hash table for alleles; to be set by bgtm
@@ -61,6 +62,7 @@ typedef struct {
 	uint64_t n_gt_read;
 	uint64_t *sample_idx;
 	uint32_t *group;
+	int32_t *mgs, mgs_def;
 	bgt_t **bgt;
 	bgt_rec_t *r;
 	kexpr_t *site_flt;
@@ -104,9 +106,11 @@ int bgtm_set_region(bgtm_t *bm, const char *reg);
 int bgtm_set_start(bgtm_t *bm, int64_t n);
 int bgtm_set_table(bgtm_t *bm, const char *fmt);
 int bgtm_set_alleles(bgtm_t *bm, const char *expr, const fmf_t *f, const char *fn); // call this AFTER bgtm_set_region()
+int bgtm_set_mgs(bgtm_t *bm, int mgs_def);
 int bgtm_add_group(bgtm_t *bm, const char *expr);
 int bgtm_add_allele(bgtm_t *bm, const char *al);
-void bgtm_prepare(bgtm_t *bm);
+int bgtm_prepare(bgtm_t *bm);
+int bgtm_test_mgs(const bgtm_t *bm);
 
 int bgtm_read(bgtm_t *bm, bcf1_t *b);
 
