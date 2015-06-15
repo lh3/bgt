@@ -377,7 +377,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if n_read > max_read {
+	if n_read > max_read || uint64(bm.n_gt_read) > bgt_max_gt {
 		fmt.Fprintln(w, "*");
 	}
 }
