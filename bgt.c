@@ -825,7 +825,7 @@ int bgtm_gen_tbl_line(bgtm_t *bm, const bgt_info_t *ss, const bcf1_t *b)
 
 int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 {
-	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref;
+	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref, al_ret;
 	const bcf1_t *b0 = 0;
 
 	// fill the buffer
@@ -871,13 +871,24 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 	}
 	// find samples having a set of alleles, or do haplotype counting
 	if (bm->h_al) {
-		int ret;
 		// test if the current record matches an allele
-		ret = al_present((khash_t(str)*)bm->h_al, bm->h_out, b);
-		if (ret == 0) return 1;
+		al_ret = al_present((khash_t(str)*)bm->h_al, bm->h_out, b);
+		if (al_ret == 0) return 1;
+	}
+	// fill AC/AN/etc and test site_flt
+	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_fields > 0 || bm->n_groups > 1) {
+		bgt_info_t ss;
+		bgtm_cal_info(bm, &ss);
+		bgtm_fill_info(bm->h_out, &ss, b);
+		if (bm->n_fields > 0)
+			bgtm_gen_tbl_line(bm, &ss, b);
+		if (!bgtm_pass_site_flt(&ss, bm->site_flt))
+			return 1;
+	}
+	if (bm->h_al) {
 		// +1 to samples having the allele
 		if ((bm->flag&BGT_F_CNT_AL) && bm->alcnt) {
-			int is_ref = (ret == 2);
+			int is_ref = (al_ret == 2);
 			for (i = 0; i < bm->n_out; ++i) {
 				int g1 = bm->a[0][i<<1|0] | bm->a[1][i<<1|0]<<1;
 				int g2 = bm->a[0][i<<1|1] | bm->a[1][i<<1|1]<<1;
@@ -891,16 +902,6 @@ int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 				if (bm->a[0][i] == 1 && bm->a[1][i] == 0) bm->hap[i] |= 1ULL<<bm->n_aal;
 		}
 		bgt_al_from_bcf(bm->h_out, b, &bm->aal[bm->n_aal++], 0);
-	}
-	// fill AC/AN/etc and test site_flt
-	if ((bm->flag & BGT_F_SET_AC) || bm->site_flt || bm->n_fields > 0 || bm->n_groups > 1) {
-		bgt_info_t ss;
-		bgtm_cal_info(bm, &ss);
-		bgtm_fill_info(bm->h_out, &ss, b);
-		if (bm->n_fields > 0)
-			bgtm_gen_tbl_line(bm, &ss, b);
-		if (!bgtm_pass_site_flt(&ss, bm->site_flt))
-			return 1;
 	}
 	return 0;
 }

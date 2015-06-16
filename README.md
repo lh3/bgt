@@ -1,4 +1,4 @@
-## Getting started
+## Getting Started
 ```sh
 # Installation
 git clone https://github.com/lh3/bgt.git
@@ -22,23 +22,35 @@ curl -s '0.0.0.0:8000' | less -S  # help
 curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
 ```
 
-## Introduction
+## Users' Guide
 
 BGT is a compact file format for efficiently storing and querying whole-genome
 genotypes of tens to hundreds of samples. It can be considered as an alternative
-to BCFv2 but it keeps genotypes only, *without per-genotype metadata*. In
+to BCFv2 but it ignores per-genotype metadata other than genotypes. In
 comparison to BCFv2, BGT is more compact, more efficient for sample subsetting,
 and supports sample metadata and allele annotations.
 
 BGT comes with a command line tool and a web application which largely mirrors
-the command line uses. It supports expressive and powerful query syntax. The
-"Getting started" section shows a few examples.
+the command line uses. The tool supports expressive and powerful query syntax.
+The "Getting Started" section shows a few examples.
 
-## Users' guide
+### 1. Data model overview
 
-### 1. Import genotypes
+BGT models a genotype data set as a matrix of genotypes with rows indexed by
+site and columns by sample. Each BGT database keeps a genetype matrix and a
+sample annotation file. Site annotations are kept in a separate file which is
+intended to be shared across multiple BGT databases. This model is different
+from VCF in that VCF 1) keeps sample information in the header and 2) stores
+site annotations in INFO along with genotypes which are not meant to be shared
+across VCFs.
 
-#### 1.1 Import VCF/BCF
+### 2. Import
+
+A BGT database always has a genotype matrix and sample names, which are
+acquired from VCF/BCF. Site annotations and sample phenotypes are optional, but 
+are recommended. Flexible meta data query is a distinguishing feature of BGT.
+
+#### 2.1 Import genotypes
 
 ```sh
 # Import BCFv2
@@ -48,18 +60,22 @@ bgt import -S prefix.bgt in.vcf.gz
 # Import VCF without "##contig" header lines
 bgt import -St ref.fa.fai prefix.bgt in.vcf.gz
 ```
+During import, BGT separates multiple alleles on one VCF line. It discards all
+INFO fields and FORMAT fields except GT. See section 2.3 about how to use
+variant annotations with BGT.
 
-#### 1.2 Import sample pheonotypes
+#### 2.2 Import sample phenotypes
 
-After importing VCF/BCF, BGT generates `prefix.bgt.spl` text file. You can add
-pheotype data to this file in a format like (fields TAB-delimited):
+After importing VCF/BCF, BGT generates `prefix.bgt.spl` text file, which for
+now only has one column of sample names. You can add pheotype data to this file
+in a format like (fields TAB-delimited):
 ```
 sample1   gender:Z:M    height:f:1.73     region:Z:WestEurasia     foo:i:10
-sample2   gender:Z:F    height:f:1.64     region:Z:WestEurasia     foo:i:20
+sample2   gender:Z:F    height:f:1.64     region:Z:WestEurasia     bar:i:20
 ```
 where each meta annotation takes a format `key:type:value` with `type` being
 `Z` for a string, `f` for a real number and `i` for an integer. We call this
-format as Flat Metadata Format or FMF in brief. You can get samples matching
+format Flat Metadata Format or FMF in brief. You can get samples matching
 certain conditions with:
 ```sh
 bgt fmf prefix.bgt.spl 'height>1.7&&region=="WestEurasia"'
@@ -67,11 +83,9 @@ bgt fmf prefix.bgt.spl 'mass/height**2>25&&region=="WestEurasia"'
 ```
 You can most common arithmetic and logical operators in the condition.
 
-#### 1.3 Import variant annotations
+#### 2.3 Import variant annotations
 
-Each VCF keeps variant annotations in its own INFO field. BGT is different. It
-recommends to keep annotations of all important variants in a separate FMF file
-and share it across BGT files. This FMF looks like:
+Site annotations are also kept in a FMF file like:
 ```
 11:209621:1:T  effect:Z:missense_variant   gene:Z:RIC8A  CCDS:Z:CCDS7690.1  CDSpos:i:347
 11:209706:1:T  effect:Z:synonymous_variant gene:Z:RIC8A  CCDS:Z:CCDS7690.1  CDSpos:i:432
@@ -87,10 +101,80 @@ gzip -dc vep-all.fmf.gz | grep -v "effect:Z:MODIFIER" | gzip > vep-important.fmf
 Using the full set of variants is fine, but is much slower with the current
 implementation.
 
-### 2. Query genotypes or genotype summary statistics
+### 3. Query
 
-#### 2.1 General query patterns
+A BGT query is composed of output and conditions. The output is VCF by default
+or can be a TAB-delimited table if requsted. Conditions include
+genotype-independent site selection with option `-r` and `-a` (e.g. variants in
+a region), genotype-independent sample selection with option `-s` (e.g. a list
+of samples), and genotype-dependent site selection with option `-f` (e.g.
+allele frequency among selected samples above a threshold). BGT has limited
+support of genotype-dependent sample selection (e.g. samples having an allele).
 
+BGT has an important concept "sample group". On the command line, each option
+`-s` creates a sample group. The #-th option `-s` populates a pair of `AC#` and
+`AN#` aggregate variables. These variables can be used in output or
+genotype-dependent site selection.
+
+#### 3.1 Genotype-independent site selection
+
+```sh
+# Select by a region
+bgt view -r 11:100,000-200,000 1kg11-1M.bgt > out.vcf
+# Select by regions in a BED (BGT will read through the entire BGT)
+bgt view -B regions.bed 1kg11-1M.bgt > out.vcf
+# Select a list of alleles (if on same chr, use random access)
+bgt view -a,11:151344:1:G,11:110992:AACTT:A,11:160513::G 1kg11-1M.bgt
+# Select by annotations (-d specifies the site annotation database)
+bgt view -d anno11-1M.fmf.gz -a'impact=="HIGH"' -CG 1kg11-1M.bgt
+```
+It should be noted that in the last command line, BGT will read through the
+entire annotation file to find the list of matching alleles. It may take
+several minutes if the site annotation files contains 100 million lines.
+That is why we recommend to use a subset of important alleles (section 2.3).
+
+#### 3.2 Genotype-independent sample selection
+
+```sh
+# Select a list of samples
+bgt view -s,HG00171,HG00173 1kg11-1M.bgt
+# Select by phenotypes (see also section 2.2)
+bgt view -s'population=="CEU"' 1kg11-1M.bgt
+# Create sample groups (there will be AC1/AN1 and AC2/AN2 in VCF INFO)
+bgt view -s'population=="CEU"' -s'population=="YRI"' -G 1kg11-1M.bgt
+```
+
+#### 3.3 Genotype-dependent site selection
+
+```sh
+# Select by allele frequency
+bgt view -f'AN>0&&AC/AN>.05' 1kg11-1M.bgt
+# Select by group frequnecy
+bgt view -s'population=="CEU"' -s'population=="YRI"' -f'AC1>10&&AC2==0' -G 1kg11-1M.bgt
+```
+Of course, we can mix all the three types of conditions in one command line:
+```sh
+bgt view -G -s'population=="CEU"' -s'population=="YRI"' -f'AC1/AN1>.1&&AC2==0' \
+         -r 11:100,000-500,000 -d anno11-1M.fmf.gz -a'CDSpos>0' 1kg11-1M.bgt
+```
+
+#### 3.4 Tabular output
+
+```sh
+# Output position, sequence and allele counts
+bgt view -t CHROM,POS,REF,ALT,AC1,AC2 -s'population=="CEU"' -s'population=="YRI"' 1kg11-1M.bgt
+```
+
+#### 3.5 Other output
+
+```sh
+# Get samples having a set of alleles (option -S)
+bgt view -S -a,11:151344:1:G,11:110992:AACTT:A,11:160513::G -s'population=="CEU"' 1kg11-1M.bgt
+# Count haplotypes
+bgt view -Hd anno11-1M.fmf.gz -a'gene=="SIRT3"' -f 'AC/AN>.01' 1kg11-1M.bgt
+# Count haplotypes in multiple populations
+bgt view -Hd anno11-1M.fmf.gz -a'gene=="SIRT3"' -f 'AC/AN>.01' -s'region=="Africa"' -s'region=="EastAsia"' 1kg11-1M.bgt
+```
 
 ## Discussions
 
