@@ -1,21 +1,3 @@
-## Table of Contents
-
-- [Getting Started](#started)
-- [Users' Guide](#guide)
-  - [Data model overview](#model)
-  - [Import](#import)
-    - [Import genotypes](#igenotype)
-    - [Import sample phenotypes](#iphenotype)
-    - [Import site annotations](#isite)
-  - [Query](#query)
-    - [Genotype-independent site selection](#givs)
-    - [Genotype-independent sample selection](#giss)
-    - [Genotype-dependent site selection](#gdvs)
-    - [Tabular output](#tabout)
-    - [Miscellaneous output](#miscout)
-  - [BGT server](#server)
-    - [Privacy](#privacy)
-
 ## <a name="started"></a>Getting Started
 ```sh
 # Installation
@@ -39,6 +21,24 @@ GOMAXPROCS=4 ./bgt-server -d anno11-1M.fmf.gz 1kg11-1M.bgt 2> server.log &
 curl -s '0.0.0.0:8000' | less -S  # help
 curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
 ```
+
+## Table of Contents
+
+- [Getting Started](#started)
+- [Users' Guide](#guide)
+  - [Data model overview](#model)
+  - [Import](#import)
+    - [Import genotypes](#igenotype)
+    - [Import sample phenotypes](#iphenotype)
+    - [Import site annotations](#isite)
+  - [Query](#query)
+    - [Genotype-independent site selection](#givs)
+    - [Genotype-independent sample selection](#giss)
+    - [Genotype-dependent site selection](#gdvs)
+    - [Tabular output](#tabout)
+    - [Miscellaneous output](#miscout)
+  - [BGT server](#server)
+    - [Privacy](#privacy)
 
 ## <a name="guide"></a>Users' Guide
 
