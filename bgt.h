@@ -54,7 +54,7 @@ typedef struct {
 
 typedef struct {
 	uint64_t hap;
-	int *cnt;
+	int tot, *cnt;
 } bgt_hapcnt_t;
 
 typedef struct {

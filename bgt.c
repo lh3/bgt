@@ -825,7 +825,7 @@ int bgtm_gen_tbl_line(bgtm_t *bm, const bgt_info_t *ss, const bcf1_t *b)
 
 int bgtm_read_core(bgtm_t *bm, bcf1_t *b)
 {
-	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref, al_ret;
+	int i, j, off = 0, n_rest = 0, max_allele = 0, l_ref, al_ret = 0;
 	const bcf1_t *b0 = 0;
 
 	// fill the buffer
@@ -920,6 +920,10 @@ int bgtm_read(bgtm_t *bm, bcf1_t *b)
  * Haplotype counting *
  **********************/
 
+#include "ksort.h"
+#define hapcnt_lt(a, b) ((a).tot > (b).tot)
+KSORT_INIT(hc, bgt_hapcnt_t, hapcnt_lt)
+
 KHASH_MAP_INIT_INT64(hc, int) // WARNING: the default 64-bit hash function is bad
 
 bgt_hapcnt_t *bgtm_hapcnt(const bgtm_t *bm, int *n_hap)
@@ -945,11 +949,13 @@ bgt_hapcnt_t *bgtm_hapcnt(const bgtm_t *bm, int *n_hap)
 		int t;
 		k = kh_get(hc, h, bm->hap[i]);
 		t = kh_val(h, k);
+		++hc[t].tot;
 		for (j = 0; j < bm->n_groups; ++j)
 			if (bm->group[i>>1] & 1U<<j)
 				++hc[t].cnt[j];
 	}
 	kh_destroy(hc, h);
+	ks_introsort(hc, n, hc);
 	*n_hap = n;
 	return hc;
 }
