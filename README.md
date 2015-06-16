@@ -1,4 +1,22 @@
-## Getting Started
+## Table of Contents
+
+- [Getting Started](#started)
+- [Users' Guide](#guide)
+  - [Data model overview](#model)
+  - [Import](#import)
+    - [Import genotypes](#igenotype)
+    - [Import sample phenotypes](#iphenotype)
+    - [Import site annotations](#isite)
+  - [Query](#query)
+    - [Genotype-independent site selection](#givs)
+    - [Genotype-independent sample selection](#giss)
+    - [Genotype-dependent site selection](#gdvs)
+    - [Tabular output](#tabout)
+    - [Miscellaneous output](#miscout)
+  - [BGT server](#server)
+    - [Privacy](#privacy)
+
+## <a name="started"></a>Getting Started
 ```sh
 # Installation
 git clone https://github.com/lh3/bgt.git
@@ -22,7 +40,7 @@ curl -s '0.0.0.0:8000' | less -S  # help
 curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
 ```
 
-## Users' Guide
+## <a name="guide"></a>Users' Guide
 
 BGT is a compact file format for efficiently storing and querying whole-genome
 genotypes of tens to hundreds of samples. It can be considered as an alternative
@@ -34,7 +52,7 @@ BGT comes with a command line tool and a web application which largely mirrors
 the command line uses. The tool supports expressive and powerful query syntax.
 The "Getting Started" section shows a few examples.
 
-### 1. Data model overview
+### <a name="model"></a>1. Data model overview
 
 BGT models a genotype data set as a matrix of genotypes with rows indexed by
 site and columns by sample. Each BGT database keeps a genetype matrix and a
@@ -44,13 +62,13 @@ from VCF in that VCF 1) keeps sample information in the header and 2) stores
 site annotations in INFO along with genotypes which are not meant to be shared
 across VCFs.
 
-### 2. Import
+### <a name="import"></a>2. Import
 
 A BGT database always has a genotype matrix and sample names, which are
 acquired from VCF/BCF. Site annotations and sample phenotypes are optional but 
 are recommended. Flexible meta data query is a distinguishing feature of BGT.
 
-#### 2.1 Import genotypes
+#### <a name="igenotype"></a>2.1 Import genotypes
 
 ```sh
 # Import BCFv2
@@ -64,7 +82,7 @@ During import, BGT separates multiple alleles on one VCF line. It discards all
 INFO fields and FORMAT fields except GT. See section 2.3 about how to use
 variant annotations with BGT.
 
-#### 2.2 Import sample phenotypes
+#### <a name="iphenotype"></a>2.2 Import sample phenotypes
 
 After importing VCF/BCF, BGT generates `prefix.bgt.spl` text file, which for
 now only has one column of sample names. You can add pheotype data to this file
@@ -83,7 +101,7 @@ bgt fmf prefix.bgt.spl 'mass/height**2>25&&region=="WestEurasia"'
 ```
 You can most common arithmetic and logical operators in the condition.
 
-#### 2.3 Import variant annotations
+#### <a name="isite"></a>2.3 Import site annotations
 
 Site annotations are also kept in a FMF file like:
 ```
@@ -101,7 +119,7 @@ gzip -dc vep-all.fmf.gz | grep -v "effect:Z:MODIFIER" | gzip > vep-important.fmf
 Using the full set of variants is fine, but is much slower with the current
 implementation.
 
-### 3. Query
+### <a name="query"></a>3. Query
 
 A BGT query is composed of output and conditions. The output is VCF by default
 or can be a TAB-delimited table if requsted. Conditions include
@@ -116,7 +134,7 @@ BGT has an important concept "sample group". On the command line, each option
 `AN#` aggregate variables. These variables can be used in output or
 genotype-dependent site selection.
 
-#### 3.1 Genotype-independent site selection
+#### <a name="givs"></a>3.1 Genotype-independent site selection
 
 ```sh
 # Select by a region
@@ -133,7 +151,7 @@ entire annotation file to find the list of matching alleles. It may take
 several minutes if the site annotation files contains 100 million lines.
 That is why we recommend to use a subset of important alleles (section 2.3).
 
-#### 3.2 Genotype-independent sample selection
+#### <a name="giss"></a>3.2 Genotype-independent sample selection
 
 ```sh
 # Select a list of samples
@@ -144,7 +162,7 @@ bgt view -s'population=="CEU"' 1kg11-1M.bgt
 bgt view -s'population=="CEU"' -s'population=="YRI"' -G 1kg11-1M.bgt
 ```
 
-#### 3.3 Genotype-dependent site selection
+#### <a name="gdvs"></a>3.3 Genotype-dependent site selection
 
 ```sh
 # Select by allele frequency
@@ -158,14 +176,14 @@ bgt view -G -s'population=="CEU"' -s'population=="YRI"' -f'AC1/AN1>.1&&AC2==0' \
          -r 11:100,000-500,000 -d anno11-1M.fmf.gz -a'CDSpos>0' 1kg11-1M.bgt
 ```
 
-#### 3.4 Tabular output
+#### <a name="tabout"></a>3.4 Tabular output
 
 ```sh
 # Output position, sequence and allele counts
 bgt view -t CHROM,POS,REF,ALT,AC1,AC2 -s'population=="CEU"' -s'population=="YRI"' 1kg11-1M.bgt
 ```
 
-#### 3.5 Miscellaneous output
+#### <a name="miscout"></a>3.5 Miscellaneous output
 
 ```sh
 # Get samples having a set of alleles (option -S)
@@ -177,7 +195,7 @@ bgt view -Hd anno11-1M.fmf.gz -a'gene=="SIRT3"' -f 'AC/AN>.01' \
          -s'region=="Africa"' -s'region=="EastAsia"' 1kg11-1M.bgt
 ```
 
-### 4. BGT server
+### <a name="server"></a>4. BGT server
 
 In addition to a command line tool, we also provide a prototype web application
 for genotype query. The query syntax is similar to `bgt view` as is shown in
@@ -191,7 +209,7 @@ for genotype query. The query syntax is similar to `bgt view` as is shown in
 6. By default (tunable), the server processes up to 10 million genotypes and then truncates the result.
 7. The server may forbid the output of genotypes of some samples (see below).
 
-#### 4.1 Privacy
+#### <a name="privacy"></a>4.1 Privacy
 
 The BGT server implements a simple mechanism to keep the privacy of samples or
 a subset of samples. It is controlled by a single parameter: minimal sample
