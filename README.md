@@ -39,6 +39,8 @@ curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
     - [Miscellaneous output](#miscout)
   - [BGT server](#server)
     - [Privacy](#privacy)
+  - [Further Notes](#notes)
+    - [Performance Evaluation](#perf)
 
 ## <a name="guide"></a>Users' Guide
 
@@ -217,6 +219,28 @@ group size or MGS.  The server refuses to create a sample group if the size of
 the group is smaller than the MGS of one of the samples in the group. In
 particular, if MGS is above one, the server doesn't report sample name or
 sample genotypes.  Each sample may have a different MGS as is marked by the
-`_mgs` integer tag in `prefix.bgt.spl`. For samples without this tag, a
+`_mgs_` integer tag in `prefix.bgt.spl`. For samples without this tag, a
 default MGS is applied.
 
+## <a name="notes"></a>Further Notes
+
+### <a name="perf"></a>Performance evaluation
+
+The test is run on the first release of [Haplotype Reference Consortium][hrc]
+(HRC) data. There are ~39 million phased SNPs in 32,488 samples. We have
+generated the BGT for the entire dataset, but We are only running tools in
+region chr11:10,000,001-20,000,000. The following table shows the time and
+command line. Note that the table omits option `-r 11:10,000,001-20,000,000`
+which has been applied to all command lines below. The speed is measured by
+million genotypes processed per CPU second.
+
+|Time   |Speed|Command line|
+|------:|----:|:------------|
+|1m8s   |68   |bgt view -G HRC-r1.bgt|
+|1m27s  |53   |bgt view -GC HRC-r1.bgt|
+|15s    |24   |bgt view -GC -s'source=="1000G"'|
+|1s     |13   |bgt view -GC -s'source=="1000G"&&population=="CEU"'|
+|43s    |21   |bgt view -G -s'source=="UK10K"' -s'source=="1000G"&&population!="GBK"'|
+|43s    |21   |bgt view -G -s'source=="UK10K"' -s'source=="1000G"&&population!="GBK"' -f'AC1/AN1>.01&&AC2==0'|
+
+[hrc]: http://www.haplotype-reference-consortium.org
