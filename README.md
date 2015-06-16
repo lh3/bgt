@@ -17,7 +17,7 @@ gzip -dc 1kg11-1M.raw.samples.gz > 1kg11-1M.bgt.spl  # sample meta data
 ./bgt view -d anno11-1M.fmf.gz -a'impact=="HIGH"' -CG 1kg11-1M.bgt
 # Server and client
 go build bgt-server.go
-./bgt-server -d anno11-1M.fmf.gz 1kg11-1M.bgt 2> server.log &
+GOMAXPROCS=4 ./bgt-server -d anno11-1M.fmf.gz 1kg11-1M.bgt 2> server.log &
 curl -s '0.0.0.0:8000' | less -S  # help
 curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
 ```
@@ -47,7 +47,7 @@ across VCFs.
 ### 2. Import
 
 A BGT database always has a genotype matrix and sample names, which are
-acquired from VCF/BCF. Site annotations and sample phenotypes are optional, but 
+acquired from VCF/BCF. Site annotations and sample phenotypes are optional but 
 are recommended. Flexible meta data query is a distinguishing feature of BGT.
 
 #### 2.1 Import genotypes
@@ -165,7 +165,7 @@ bgt view -G -s'population=="CEU"' -s'population=="YRI"' -f'AC1/AN1>.1&&AC2==0' \
 bgt view -t CHROM,POS,REF,ALT,AC1,AC2 -s'population=="CEU"' -s'population=="YRI"' 1kg11-1M.bgt
 ```
 
-#### 3.5 Other output
+#### 3.5 Miscellaneous output
 
 ```sh
 # Get samples having a set of alleles (option -S)
@@ -173,103 +173,32 @@ bgt view -S -a,11:151344:1:G,11:110992:AACTT:A,11:160513::G -s'population=="CEU"
 # Count haplotypes
 bgt view -Hd anno11-1M.fmf.gz -a'gene=="SIRT3"' -f 'AC/AN>.01' 1kg11-1M.bgt
 # Count haplotypes in multiple populations
-bgt view -Hd anno11-1M.fmf.gz -a'gene=="SIRT3"' -f 'AC/AN>.01' -s'region=="Africa"' -s'region=="EastAsia"' 1kg11-1M.bgt
+bgt view -Hd anno11-1M.fmf.gz -a'gene=="SIRT3"' -f 'AC/AN>.01' \
+         -s'region=="Africa"' -s'region=="EastAsia"' 1kg11-1M.bgt
 ```
 
-## Discussions
+### 4. BGT server
 
-### Unary VCF
+In addition to a command line tool, we also provide a prototype web application
+for genotype query. The query syntax is similar to `bgt view` as is shown in
+"Getting Started", but with some notable differences:
 
-During import, BGT converts a multi-allelic VCF to unary VCF on the fly. In
-this process, BGT first decompose a complex variant consisting of multiple SNPs
-and INDELs into atomic events and then describes each atomic event with one and
-only one VCF line. If a sample has two overlapping non-reference alleles, BGT
-will use a `<M>` symbolic allele. For example, BGT internally converts this VCF:
-```
-#CHROM POS ID REF ALT     QUAL FILTER INFO FORMAT S1   S2   S3   S4
-11  101  .  GCGT  G,GCGA,GTGA,CCGT 199  .  .  GT  0/1  1/2  2/3  2/4
-```
-to
-```
-#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT S1 S2 S3 S4
-11  101  .  G     C,<M>  0  .  .  GT  0/2  2/0  0/0  0/1
-11  101  .  GCGT  G,<M>  0  .  .  GT  0/1  1/2  2/2  2/2
-11  102  .  C     T,<M>  0  .  .  GT  0/2  2/0  0/1  0/0
-11  104  .  T     A,<M>  0  .  .  GT  0/2  2/1  1/1  1/0
-```
-While [vt][vt] aims to achieve a similar goal, it is unable to properly set the
-genotype fields as it [cannot][vtissue] perform decomposition and "unarization"
-at the same time.
+1. The server uses `.and.` for the logical AND operator `&&` (as `&` is a special character to HTML).
+2. The server can't load a list of samples from a local file (for security).
+3. The server doesn't support BCF output for now (can be implemented on request).
+4. The server doesn't output genotypes by default (option `g` required for server).
+5. The server loads site annotations into RAM (for real-time response but requiring more memory).
+6. By default (tunable), the server processes up to 10 million genotypes and then truncates the result.
+7. The server may forbid the output of genotypes of some samples (see below).
 
-### Theoretical advnatages of BGT
+#### 4.1 Privacy
 
-Internally, BGT uses BCF to keep allele positions and sequences, and uses PBWT
-to store sample genotypes. The time complexity to extract *k* samples across
-*n* sites is *O*(*n*(*mH*<sub>0</sub>+*k*)), where *m* is the total number of
-samples in BGT and *H*<sub>0</sub> the average 0-order empirical entroy of PBWT. When *k* is
-larger than a few hundred, the time complexity approaches *O*(*nk*),
-independent of *m*. This is a significant improvement over the *O*(*nm*) time
-complexity if we use BCF. Although BGT comes with a larger constant - probably
-due to more cache misses - and is thus slower on extracting all samples, it
-can be parallelized by extracting a subset of samples and combining samples
-later, which can't be achieved with BCF.
+The BGT server implements a simple mechanism to keep the privacy of samples or
+a subset of samples. It is controlled by a single parameter: minimal sample
+group size or MGS.  The server refuses to create a sample group if the size of
+the group is smaller than the MGS of one of the samples in the group. In
+particular, if MGS is above one, the server doesn't report sample name or
+sample genotypes.  Each sample may have a different MGS as is marked by the
+`_mgs` integer tag in `prefix.bgt.spl`. For samples without this tag, a
+default MGS is applied.
 
-In addition to genotype extraction, BGT may in theory support advanced PBWT
-operations such as imputation and phasing. Implementing these functionalities
-is not on the plan for the time being.
-
-### Performance on 1000g VCF
-
-The experiment is done on the 1000g autosomal VCF version v5a. There are
-81.7 million alleles in VCF. The size of BGT is 3.46GB (1GB=1024\*1024\*1024
-bytes), or 45.4 bytes per site in average. Of the 45.4 bytes, 6.6 bytes
-are used to keep ALT sequences and positions, and 38.8 bytes for genotypes
-in the indexed PBWT. Converting this BGT file(s) to BCF results in a 13.1GB
-file. BGT is much smaller for the same information.
-
-The following shows the time on a few operations (the following is done with
-BGT-r98; newer versions should have a similar performance):
-```sh
-# extract two samples across all autosomes
-1m10s    bgt view -bl0 -s:HG00100,HG00121 1000g.bgt > /dev/null
-5m45s    htsbox vcfview -bl0 -s:HG00100,HG00121 1000g.bcf > /dev/null
-# extract the genotypes of the 99 CEU samples on chr11
-14s      bgt view -bl0 -s CEU.txt -r 11 1000g.bgt > /dev/null
-22s      htsbox vcfview -bl0 -s CEU.txt 1000g.bcf 11 > /dev/null
-# list all genotypes on chr11
-2m09s    bgt view -bl0 -r 11 1000g.bgt > /dev/null
-1m12s    htsbox vcfview -bl0 1000g.bcf 11 > /dev/null
-# variants common in GBR but rare in YRI
-28s      bgt view -s"population=='GBR'" -s"population=='YRI'" \
-             -Gf'AC1/AN1>.2&&AC2/AN2<.05' -r11 1000g.bgt > /dev/null
-```
-
-### Performance on ExAC VCF
-
-ExAC release 3 consists of 60 thousand samples and 9.3 million filtered alleles.
-The BGT file size is 7.4GB, or 856 bytes per site. The genotype compression
-ratio is much worse than 1000g because: 1) ExAC contains many missing data; 2)
-ExAC are unphased and 3) exons separated by long introns or intergenes are
-unlinked. Nonetheless, the BGT file is less than half of the equivalent BCF
-file (17GB in size) converted from BGT.
-
-The following shows the time on a few operations (there are 565k alleles on chr11):
-```sh
-# extract the genotypes of 2 public samples, from chr11
-1.6s     bgt view -bl0 -s:NA10851,NA12044 -r11 exac3.bgt > /dev/null
-40.3s    htsbox vcfview -bl0 -s:NA10851,NA12044 exac3.bcf 11 > /dev/null
-# extract the genotypes of the 74 1000g CEU samples on chr11
-3.2s     bgt view -bl0 -s CEU.txt -r 11 exac3.bgt > /dev/null
-41.4s    htsbox vcfview -bl0 -s CEU.txt exac3.bcf 11 > /dev/null
-# get chr11 alleles polymorphic in the 74 CEU samples
-2.9s     bgt view -GC1 -s CEU.txt -r 11 exac3.bgt > /dev/null
-# extract the genotypes of 1000 random samples on chr11
-19.2s    bgt view -bl0 -s random-1000.txt -r 11 exac3.bgt > /dev/null
-47.2s    htsbox vcfview -bl0 -s random-1000.txt exac3.bcf 11 > /dev/null
-# extract the genotypes of 10000 random samples on chr11
-3m15s    bgt view -bl0 -s random-1000.txt -r 11 exac3.bgt > /dev/null
-1m42s    htsbox vcfview -bl0 -s random-10000.txt exac3.bcf 11 > /dev/null
-```
-
-[vt]: https://github.com/atks/vt
-[vtissue]: https://github.com/atks/vt/issues/26
