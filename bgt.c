@@ -151,7 +151,7 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 			if (ke && fmf_test(f, i, ke)) to_add = 1;
 			if (kh_get(s2i, h, f->rows[i].name) != kh_end(h)) {
 				int mgs = bgt->f->mgs[i] >= 0? bgt->f->mgs[i] : bgt->mgs_def;
-				if (mgs == 1) to_add = 1;
+				if (mgs == 1 || mgs == 0) to_add = 1;
 			}
 			if (to_add) ++size, bgt->flag[i] |= 1<<bgt->n_groups;
 		}
