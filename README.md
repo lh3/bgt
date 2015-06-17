@@ -39,8 +39,8 @@ curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
     - [Miscellaneous output](#miscout)
   - [BGT server](#server)
     - [Privacy](#privacy)
-  - [Further Notes](#notes)
-    - [Performance Evaluation](#perf)
+- [Further Notes](#notes)
+  - [Performance Evaluation](#perf)
 
 ## <a name="guide"></a>Users' Guide
 
