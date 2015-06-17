@@ -40,8 +40,8 @@ curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
   - [BGT server](#server)
     - [Privacy](#privacy)
 - [Further Notes](#notes)
-  - [Performance Evaluation](#perf)
-  - [Comparison to other tools](#others)
+  - [Performance evaluation](#perf)
+  - [Other genotype formats](#others)
 
 ## <a name="guide"></a>Users' Guide
 
@@ -244,13 +244,13 @@ which has been applied to all command lines below.
 |8s     |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"'|
 
 On file sizes, the BGT database for HRC-r1 is 7.4GB (this excludes the `.pb1`
-file which is generated but not used for now; 1GB=1024*1024*1024 bytes). In comparison,
+file which is generated but not used for now; 1GB=1024\*1024\*1024 bytes). In comparison,
 BCFv2 for the same data takes 65GB, GQT 93GB and PBWT 4.4GB. BGT and PBWT,
 which are based on the same data structure, are much more compact. BGT is
 larger than PBWT primarily because BGT keeps an extra bit per haplotype to
 distinguish reference and multi allele, and stores markers to enable fast
 random access.
 
-### <a name="others"></a>Comparison to other tools
+### <a name="others"></a>Other genotype formats
 
 [hrc]: http://www.haplotype-reference-consortium.org
