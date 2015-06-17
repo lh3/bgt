@@ -123,7 +123,7 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST 
 {
 	const uint8_t *q;
 	pbs_dat_t *p = d, *end = d + r, *swap, *x[2];
-	int i, n1, c[2], acc[2];
+	int n1, c[2], acc[2];
 //	radix_sort_r(d, d + r); // sort by rank
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
@@ -145,8 +145,10 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST 
 	swap = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
 	memcpy(swap, d, r * sizeof(pbs_dat_t));
 	x[0] = d, x[1] = d + (r - n1);
-	for (i = 0; i < r; ++i) 
-		*x[swap[i].b]++ = swap[i];
+//	The following 3 lines are the loop fission of: for (i = 0; i < r; ++i) *x[swap[i].b]++ = swap[i];
+	end = swap + r;
+	for (p = swap; p != end; ++p) if (p->b == 0) *x[0]++ = *p;
+	for (p = swap; p != end; ++p) if (p->b != 0) *x[1]++ = *p;
 	free(swap);
 }
 
