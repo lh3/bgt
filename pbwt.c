@@ -306,7 +306,7 @@ const uint8_t **pbf_read(pbf_t *pb)
 	}
 	if (t == 'B') {
 		for (g = 0; g < pb->g; ++g) {
-			int32_t l, i;
+			int32_t l;
 			fread(&l, 4, 1, pb->fp);
 			fread(pb->buf, 1, l, pb->fp);
 			pb->buf[l] = 0;
