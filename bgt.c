@@ -737,12 +737,8 @@ void bgtm_cal_info(const bgtm_t *bm, bgt_info_t *ss)
 	int32_t cnt[4], i;
 	memset(cnt, 0, 4 * 4);
 	ss->n_groups = bm->n_groups;
-	for (i = 0; i < bm->n_out<<1; ++i)
-		++cnt[bm->a[1][i]<<1 | bm->a[0][i]];
-	ss->an = cnt[0] + cnt[1] + cnt[3];
-	ss->ac[0] = cnt[1], ss->ac[1] = cnt[3];
 	if (bm->n_groups > 1) {
-		int32_t gcnt[BGT_MAX_GROUPS][4];
+		int32_t j, gcnt[BGT_MAX_GROUPS][4];
 		memset(gcnt, 0, 4 * BGT_MAX_GROUPS * 4);
 		for (i = 0; i < bm->n_out<<1; ++i)
 			++gcnt[bm->group[i>>1]-1][bm->a[1][i]<<1 | bm->a[0][i]];
@@ -750,8 +746,14 @@ void bgtm_cal_info(const bgtm_t *bm, bgt_info_t *ss)
 			ss->gan[i] = gcnt[i][0] + gcnt[i][1] + gcnt[i][3];
 			ss->gac[i][0] = gcnt[i][1];
 			ss->gac[i][1] = gcnt[i][3];
+			for (j = 0; j < 4; ++j) cnt[j] += gcnt[i][j];
 		}
+	} else {
+		for (i = 0; i < bm->n_out<<1; ++i)
+			++cnt[bm->a[1][i]<<1 | bm->a[0][i]];
 	}
+	ss->an = cnt[0] + cnt[1] + cnt[3];
+	ss->ac[0] = cnt[1], ss->ac[1] = cnt[3];
 }
 
 void bgtm_assign_by_bcf(kexpr_t *e, const bcf_hdr_t *h, const bcf1_t *b)
