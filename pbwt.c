@@ -119,7 +119,7 @@ void pbc_dec(pbc_t *pb, const uint8_t *b)
 #define pbs_key_r(x) ((x).r)
 KRADIX_SORT_INIT(r, pbs_dat_t, pbs_key_r, 4)
 
-void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST BE sorted by d[i].r
+int pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST BE sorted by d[i].r
 {
 	const uint8_t *q;
 	pbs_dat_t *p = d, *end = d + r;
@@ -157,6 +157,7 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST 
 		memcpy(x[0], swap, (x[1] - swap) * sizeof(pbs_dat_t));
 		free(swap);
 	}
+	return n1;
 }
 
 /************
@@ -320,8 +321,11 @@ const uint8_t **pbf_read(pbf_t *pb)
 			if (pb->n_sub > 0 && pb->n_sub < pb->m) { // subset decoding
 				pbs_dat_t *sub = pb->sub[g], *end = sub + pb->n_sub, *p;
 				uint8_t *u = pb->pb[g]->u;
-				pbs_dec(pb->m, pb->n_sub, sub, pb->buf);
-				for (p = sub; p != end; ++p) u[p->i] = p->b;
+				int n1;
+				n1 = pbs_dec(pb->m, pb->n_sub, sub, pb->buf);
+				if (n1 == 0) memset(u, 0, pb->n_sub);
+				else if (n1 == pb->m) memset(u, 1, pb->n_sub);
+				else for (p = sub; p != end; ++p) u[p->i] = p->b;
 			} else pbc_dec(pb->pb[g], pb->buf); // full decoding
 		}
 		++pb->k;
