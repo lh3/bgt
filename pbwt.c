@@ -140,8 +140,9 @@ int pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST B
 	for (q = u; p != end && *q; ++q) {
 		int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
 		if (s <= p->r && p->r < s + l) {
+			int w = acc[b] + c[b] - s;
 			do {
-				p->r = acc[b] + c[b] + (p->r - s);
+				p->r += w; // this is a faster version of: "p->r = acc[b] + c[b] + (p->r - s);"
 				p->b = b;
 				++p;
 			} while (p != end && s <= p->r && p->r < s + l);
