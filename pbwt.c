@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include "pbwt.h"
@@ -71,14 +72,19 @@ void pbc_dec_core(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_
 	int32_t *p[2], n1, s;
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
-	p[0] = S, p[1] = p[0] + (m - n1);
-	for (q = u, s = 0; *q; ++q) {
-		int i, l = pbr_tbl[*q>>1], b = *q&1; // $l is the run length
-		for (i = 0; i < l; ++i) {
-			int32_t x = S0[s + i];
-			a[x] = b, *p[b]++ = x;
+	if (n1 == 0 || n1 == m) {
+		memcpy(S, S0, m * 4);
+		memset(a, (n1 == m), m);
+	} else {
+		p[0] = S, p[1] = p[0] + (m - n1);
+		for (q = u, s = 0; *q; ++q) {
+			int i, l = pbr_tbl[*q>>1], b = *q&1; // $l is the run length
+			for (i = 0; i < l; ++i) {
+				int32_t x = S0[s + i];
+				a[x] = b, *p[b]++ = x;
+			}
+			s += l;
 		}
-		s += l;
 	}
 }
 
