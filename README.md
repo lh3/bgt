@@ -236,14 +236,11 @@ million genotypes processed per CPU second.
 
 |Time   |Speed|Command line|
 |------:|----:|:------------|
-|1m8s   |68   |bgt view -G HRC-r1.bgt|
-|13s    |356  |bcftools view -Gu HRC-r1.bcf|
-|1m27s  |53   |bgt view -GC HRC-r1.bgt|
-|15s    |24   |bgt view -GC -s'source=="1000G"'|
-|19s    |19   |bcftools view -Gu -S 1000G.txt HRC-r1.bcf|
-|1s     |13   |bgt view -GC -s'source=="1000G"&&population=="CEU"'|
-|13s    |0.5  |bcftools view -Gu -S 1000G-CEU.txt HRC-r1.bcf|
-|43s    |21   |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"'|
-|43s    |21   |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"' -f 'AC1/AN1>.01&&AC2==0'|
+|11s    |     |bgt view -G HRC-r1.bgt|
+|13s    |     |bcftools view -Gu HRC-r1.bcf|
+|30s    |     |bgt view -GC HRC-r1.bgt|
+|4s     |     |bgt view -GC -s'source=="1000G"'|
+|19s    |     |bcftools view -Gu -S 1000G.txt HRC-r1.bcf|
+|8s     |     |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"'|
 
 [hrc]: http://www.haplotype-reference-consortium.org
