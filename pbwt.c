@@ -77,10 +77,11 @@ void pbc_dec_core(int m, const int32_t *S0, const uint8_t *u, int32_t *S, uint8_
 		memset(a, (n1 == m), m);
 	} else {
 		p[0] = S, p[1] = p[0] + (m - n1);
+		memset(a, 0, m);
 		for (q = u, s = 0; *q; ++q) {
 			int i, l = pbr_tbl[*q>>1], b = *q&1; // $l is the run length
 			const int32_t *t = &S0[s];
-			for (i = 0; i < l; ++i) a[t[i]] = b;
+			if (b) for (i = 0; i < l; ++i) a[t[i]] = b;
 			memcpy(p[b], t, l * 4);
 			p[b] += l;
 			s += l;
