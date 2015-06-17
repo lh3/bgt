@@ -126,39 +126,47 @@ void pbc_dec(pbc_t *pb, const uint8_t *b)
 #define pbs_key_r(x) ((x).r)
 KRADIX_SORT_INIT(r, pbs_dat_t, pbs_key_r, 4)
 
-int pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST BE sorted by d[i].r
+void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u, uint8_t *a) // IMPORTANT: d MUST BE sorted by d[i].r
 {
 	const uint8_t *q;
-	pbs_dat_t *p = d, *end = d + r, *swap, *x[2], *t;
-	int n1, c[2], acc[2];
-
+	int n1;
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
-	if (n1 == 0 || n1 == m) return n1; // IMPORTANT: in this case, d[i].b is INCORRECT!!!
-	acc[0] = 0, acc[1] = m - n1; // accumulative counts
-	c[0] = c[1] = 0; // running marginal counts
-	for (q = u; p != end && *q; ++q) {
-		int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
-		if (s <= p->r && p->r < s + l) {
-			int w = acc[b] + c[b] - s;
-			do {
-				p->r += w; // this is a faster version of: "p->r = acc[b] + c[b] + (p->r - s);"
-				p->b = b;
-				++p;
-			} while (p != end && s <= p->r && p->r < s + l);
+	if (n1 == 0) { // all zero
+		memset(a, 0, r);
+	} else if (n1 == m) { // all one
+		memset(a, 1, r);
+	} else {
+		pbs_dat_t *p = d, *end = d + r, *d1, *x[2];
+		int c[2], acc[2];
+		acc[0] = 0, acc[1] = m - n1; // accumulative counts
+		c[0] = c[1] = 0; // running marginal counts
+		d1 = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
+		x[0] = d, x[1] = d1;
+		memset(a, 0, r);
+		for (q = u; p != end && *q; ++q) {
+			int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
+			if (s <= p->r && p->r < s + l) {
+				int w = acc[b] + c[b] - s;
+				pbs_dat_t *p0 = p;
+				do {
+					p->r += w; // this is a faster version of: "p->r = acc[b] + c[b] + (p->r - s);"
+					++p;
+				} while (p != end && s <= p->r && p->r < s + l);
+				if (b == 0) {
+					if (x[0] != p0) memmove(x[0], p0, (p - p0) * sizeof(pbs_dat_t));
+					x[0] += p - p0;
+				} else {
+					memcpy(x[1], p0, (p - p0) * sizeof(pbs_dat_t));
+					x[1] += p - p0;
+					while (p0 < p) a[p0->i] = 1, ++p0;
+				}
+			}
+			c[b] += l;
 		}
-		c[b] += l;
+		memcpy(x[0], d1, (x[1] - d1) * sizeof(pbs_dat_t));
+		free(d1);
 	}
-	// one round of radix sort; this sorts d by d[i].r
-	swap = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
-	for (t = d; t != end && t->b == 0; ++t); // skip those with bit 0; these won't be changed during sorting
-	// the following two loops is the fission of "for (p = d; p != end; ++p) *x[p->b]++ = *p;"
-	x[0] = t, x[1] = swap;
-	for (p = t; p != end; ++p) if (p->b != 0) *x[1]++ = *p;
-	for (p = t; p != end; ++p) if (p->b == 0) *x[0]++ = *p;
-	memcpy(x[0], swap, (x[1] - swap) * sizeof(pbs_dat_t));
-	free(swap);
-	return n1;
 }
 
 /************
@@ -319,15 +327,9 @@ const uint8_t **pbf_read(pbf_t *pb)
 			fread(&l, 4, 1, pb->fp);
 			fread(pb->buf, 1, l, pb->fp);
 			pb->buf[l] = 0;
-			if (pb->n_sub > 0 && pb->n_sub < pb->m) { // subset decoding
-				pbs_dat_t *sub = pb->sub[g], *end = sub + pb->n_sub, *p;
-				uint8_t *u = pb->pb[g]->u;
-				int n1;
-				n1 = pbs_dec(pb->m, pb->n_sub, sub, pb->buf);
-				if (n1 == 0) memset(u, 0, pb->n_sub);
-				else if (n1 == pb->m) memset(u, 1, pb->n_sub);
-				else for (p = sub; p != end; ++p) u[p->i] = p->b;
-			} else pbc_dec(pb->pb[g], pb->buf); // full decoding
+			if (pb->n_sub > 0 && pb->n_sub < pb->m) // subset decoding
+				pbs_dec(pb->m, pb->n_sub, pb->sub[g], pb->buf, pb->pb[g]->u);
+			else pbc_dec(pb->pb[g], pb->buf); // full decoding
 		}
 		++pb->k;
 	} else return 0;
