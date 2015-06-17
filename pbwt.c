@@ -124,18 +124,17 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST 
 	const uint8_t *q;
 	pbs_dat_t *p = d, *end = d + r, *swap, *x[2];
 	int n1, c[2], acc[2];
-//	radix_sort_r(d, d + r); // sort by rank
+
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
 	acc[0] = 0, acc[1] = m - n1; // accumulative counts
 	c[0] = c[1] = 0; // running marginal counts
-	for (q = u, n1 = 0; p != end && *q; ++q) {
+	for (q = u; p != end && *q; ++q) {
 		int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
 		if (s <= p->r && p->r < s + l) {
 			do {
 				p->r = acc[b] + c[b] + (p->r - s);
 				p->b = b;
-				n1 += b;
 				++p;
 			} while (p != end && s <= p->r && p->r < s + l);
 		}
@@ -143,12 +142,11 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST 
 	}
 	// one round of radix sort; this sorts d by d[i].r
 	swap = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
-	memcpy(swap, d, r * sizeof(pbs_dat_t));
-	x[0] = d, x[1] = d + (r - n1);
-//	The following 3 lines are the loop fission of: for (int i = 0; i < r; ++i) *x[swap[i].b]++ = swap[i];
-	end = swap + r;
-	for (p = swap; p != end; ++p) if (p->b == 0) *x[0]++ = *p;
-	for (p = swap; p != end; ++p) if (p->b != 0) *x[1]++ = *p;
+	x[0] = d, x[1] = swap;
+	// the following two loops is the fission of "for (p = d; p != end; ++p) *x[p->b]++ = *p;"
+	for (p = d; p != end; ++p) if (p->b != 0) *x[1]++ = *p;
+	for (p = d; p != end; ++p) if (p->b == 0) *x[0]++ = *p;
+	memcpy(x[0], swap, (x[1] - swap) * sizeof(pbs_dat_t));
 	free(swap);
 }
 
