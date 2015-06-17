@@ -10,7 +10,7 @@ typedef struct { // full codec
 
 typedef struct {
 	uint32_t r;
-	uint32_t S:31, b:1;
+	uint32_t i:31, b:1;
 } pbs_dat_t;
 
 struct pbf_s;

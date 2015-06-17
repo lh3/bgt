@@ -145,7 +145,7 @@ void pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST 
 	swap = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
 	memcpy(swap, d, r * sizeof(pbs_dat_t));
 	x[0] = d, x[1] = d + (r - n1);
-//	The following 3 lines are the loop fission of: for (i = 0; i < r; ++i) *x[swap[i].b]++ = swap[i];
+//	The following 3 lines are the loop fission of: for (int i = 0; i < r; ++i) *x[swap[i].b]++ = swap[i];
 	end = swap + r;
 	for (p = swap; p != end; ++p) if (p->b == 0) *x[0]++ = *p;
 	for (p = swap; p != end; ++p) if (p->b != 0) *x[1]++ = *p;
@@ -172,7 +172,7 @@ struct pbf_s {
 
 	int n_sub;
 	pbs_dat_t **sub;
-	int *sub_pos;
+	int *sub_list;
 
 	int64_t k;     // the row index just processed (reading only)
 	uint8_t *buf;  // reading only
@@ -257,7 +257,7 @@ int pbf_close(pbf_t *pb)
 		fwrite(pb->idx, 8, pb->n_idx, pb->fp);
 		fwrite(&off, 8, 1, pb->fp);
 	}
-	free(pb->idx); free(pb->ret); free(pb->invS); free(pb->buf); free(pb->sub_pos);
+	free(pb->idx); free(pb->ret); free(pb->invS); free(pb->buf); free(pb->sub_list);
 	for (g = 0; g < pb->g; ++g) {
 		free(pb->pb[g]);
 		if (pb->sub) free(pb->sub[g]);
@@ -311,10 +311,10 @@ const uint8_t **pbf_read(pbf_t *pb)
 			fread(pb->buf, 1, l, pb->fp);
 			pb->buf[l] = 0;
 			if (pb->n_sub > 0 && pb->n_sub < pb->m) { // subset decoding
-				pbs_dat_t *sub = pb->sub[g];
+				pbs_dat_t *sub = pb->sub[g], *end = sub + pb->n_sub, *p;
+				uint8_t *u = pb->pb[g]->u;
 				pbs_dec(pb->m, pb->n_sub, sub, pb->buf);
-				for (i = 0; i < pb->n_sub; ++i)
-					pb->pb[g]->u[pb->sub_pos[sub[i].S]] = sub[i].b;
+				for (p = sub; p != end; ++p) u[p->i] = p->b;
 			} else pbc_dec(pb->pb[g], pb->buf); // full decoding
 		}
 		++pb->k;
@@ -323,12 +323,12 @@ const uint8_t **pbf_read(pbf_t *pb)
 }
 
 // find the rank of a subset of columns given S
-static inline void pbf_fill_sub(int m, const int32_t *S, int n_sub, pbs_dat_t *sub, int32_t *invS)
+static inline void pbf_fill_sub(int m, const int32_t *S, int n_sub, pbs_dat_t *sub, int32_t *invS, int *sub_list)
 {
 	int i;
 	for (i = 0; i < m; ++i) invS[S[i]] = i;
 	for (i = 0; i < n_sub; ++i)
-		sub[i].r = invS[sub[i].S];
+		sub[i].r = invS[sub_list[sub[i].i]];
 	radix_sort_r(sub, sub + n_sub);
 }
 
@@ -349,7 +349,7 @@ int pbf_seek(pbf_t *pb, uint64_t k)
 	for (g = 0; g < pb->g; ++g) {
 		fread(pb->pb[g]->S, 4, pb->m, pb->fp);
 		if (pb->n_sub > 0 && pb->n_sub < pb->m) // update pb->sub if needed
-			pbf_fill_sub(pb->m, pb->pb[g]->S, pb->n_sub, pb->sub[g], pb->invS);
+			pbf_fill_sub(pb->m, pb->pb[g]->S, pb->n_sub, pb->sub[g], pb->invS, pb->sub_list);
 	}
 	pb->k = k >> pb->shift << pb->shift;
 	x = k & ((1<<pb->shift) - 1);
@@ -362,13 +362,12 @@ int pbf_subset(pbf_t *pb, int n_sub, int *sub)
 	int i, g;
 	if (n_sub <= 0 || n_sub >= pb->m || sub == 0) n_sub = 0;
 	if ((pb->n_sub = n_sub) != 0) {
-		if (pb->sub_pos == 0)
-			pb->sub_pos = (int*)calloc(pb->m, sizeof(int));
-		for (i = 0; i < n_sub; ++i) pb->sub_pos[sub[i]] = i;
+		pb->sub_list = (int*)realloc(pb->sub_list, n_sub * sizeof(int));
+		memcpy(pb->sub_list, sub, n_sub * sizeof(int));
 		for (g = 0; g < pb->g; ++g) {
 			pb->sub[g] = (pbs_dat_t*)realloc(pb->sub[g], n_sub * sizeof(pbs_dat_t));
-			for (i = 0; i < n_sub; ++i) pb->sub[g][i].S = sub[i];
-			pbf_fill_sub(pb->m, pb->pb[g]->S, n_sub, pb->sub[g], pb->invS);
+			for (i = 0; i < n_sub; ++i) pb->sub[g][i].i = i;
+			pbf_fill_sub(pb->m, pb->pb[g]->S, n_sub, pb->sub[g], pb->invS, pb->sub_list);
 		}
 	}
 	return 0;
