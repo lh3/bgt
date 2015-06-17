@@ -231,16 +231,15 @@ The test is run on the first release of [Haplotype Reference Consortium][hrc]
 generated the BGT for the entire dataset, but We are only running tools in
 region chr11:10,000,001-20,000,000. The following table shows the time and
 command line. Note that the table omits option `-r 11:10,000,001-20,000,000`
-which has been applied to all command lines below. The speed is measured by
-million genotypes processed per CPU second.
+which has been applied to all command lines below.
 
-|Time   |Speed|Command line|
-|------:|----:|:------------|
-|11s    |     |bgt view -G HRC-r1.bgt|
-|13s    |     |bcftools view -Gu HRC-r1.bcf|
-|30s    |     |bgt view -GC HRC-r1.bgt|
-|4s     |     |bgt view -GC -s'source=="1000G"'|
-|19s    |     |bcftools view -Gu -S 1000G.txt HRC-r1.bcf|
-|8s     |     |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"'|
+|Time   |Command line|
+|------:|:------------|
+|11s    |bgt view -G HRC-r1.bgt|
+|13s    |bcftools view -Gu HRC-r1.bcf|
+|30s    |bgt view -GC HRC-r1.bgt|
+|4s     |bgt view -GC -s'source=="1000G"'|
+|19s    |bcftools view -Gu -S 1000G.txt HRC-r1.bcf|
+|8s     |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"'|
 
 [hrc]: http://www.haplotype-reference-consortium.org
