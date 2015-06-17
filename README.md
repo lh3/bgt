@@ -41,6 +41,7 @@ curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
     - [Privacy](#privacy)
 - [Further Notes](#notes)
   - [Performance Evaluation](#perf)
+  - [Comparison to other tools](#others)
 
 ## <a name="guide"></a>Users' Guide
 
@@ -219,7 +220,7 @@ group size or MGS.  The server refuses to create a sample group if the size of
 the group is smaller than the MGS of one of the samples in the group. In
 particular, if MGS is above one, the server doesn't report sample name or
 sample genotypes.  Each sample may have a different MGS as is marked by the
-`_mgs_` integer tag in `prefix.bgt.spl`. For samples without this tag, a
+`_mgs` integer tag in `prefix.bgt.spl`. For samples without this tag, a
 default MGS is applied.
 
 ## <a name="notes"></a>Further Notes
@@ -241,5 +242,15 @@ which has been applied to all command lines below.
 |4s     |bgt view -GC -s'source=="1000G"'|
 |19s    |bcftools view -Gu -S 1000G.txt HRC-r1.bcf|
 |8s     |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"'|
+
+On file sizes, the BGT database for HRC-r1 is 7.4GB (this excludes the `.pb1`
+file which is generated but not used for now; 1GB=1024*1024*1024 bytes). In comparison,
+BCFv2 for the same data takes 65GB, GQT 93GB and PBWT 4.4GB. BGT and PBWT,
+which are based on the same data structure, are much more compact. BGT is
+larger than PBWT primarily because BGT keeps an extra bit per haplotype to
+distinguish reference and multi allele, and stores markers to enable fast
+random access.
+
+### <a name="others"></a>Comparison to other tools
 
 [hrc]: http://www.haplotype-reference-consortium.org
