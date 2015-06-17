@@ -122,41 +122,34 @@ KRADIX_SORT_INIT(r, pbs_dat_t, pbs_key_r, 4)
 int pbs_dec(int m, int r, pbs_dat_t *d, const uint8_t *u) // IMPORTANT: d MUST BE sorted by d[i].r
 {
 	const uint8_t *q;
-	pbs_dat_t *p = d, *end = d + r;
-	int n1;
+	pbs_dat_t *p = d, *end = d + r, *swap, *x[2], *t;
+	int n1, c[2], acc[2];
 
 	for (q = u, n1 = 0; *q; ++q) // count the number of 1 bits
 		if (*q&1) n1 += pbr_tbl[*q>>1];
-	if (n1 == 0) { // all zero; d[].r is not changed
-		for (p = d; p != end; ++p) p->b = 0;
-	} else if (n1 == m) { // one; d[].r is not changed, either
-		for (p = d; p != end; ++p) p->b = 1;
-	} else {
-		int c[2], acc[2];
-		pbs_dat_t *swap, *x[2], *t;
-		acc[0] = 0, acc[1] = m - n1; // accumulative counts
-		c[0] = c[1] = 0; // running marginal counts
-		for (q = u; p != end && *q; ++q) {
-			int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
-			if (s <= p->r && p->r < s + l) {
-				do {
-					p->r = acc[b] + c[b] + (p->r - s);
-					p->b = b;
-					++p;
-				} while (p != end && s <= p->r && p->r < s + l);
-			}
-			c[b] += l;
+	if (n1 == 0 || n1 == m) return n1; // IMPORTANT: in this case, d[i].b is INCORRECT!!!
+	acc[0] = 0, acc[1] = m - n1; // accumulative counts
+	c[0] = c[1] = 0; // running marginal counts
+	for (q = u; p != end && *q; ++q) {
+		int l = pbr_tbl[*q>>1], b = *q&1, s = c[0] + c[1];
+		if (s <= p->r && p->r < s + l) {
+			do {
+				p->r = acc[b] + c[b] + (p->r - s);
+				p->b = b;
+				++p;
+			} while (p != end && s <= p->r && p->r < s + l);
 		}
-		// one round of radix sort; this sorts d by d[i].r
-		swap = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
-		for (t = d; t != end && t->b == 0; ++t); // skip those with bit 0; these won't be changed during sorting
-		// the following two loops is the fission of "for (p = d; p != end; ++p) *x[p->b]++ = *p;"
-		x[0] = t, x[1] = swap;
-		for (p = t; p != end; ++p) if (p->b != 0) *x[1]++ = *p;
-		for (p = t; p != end; ++p) if (p->b == 0) *x[0]++ = *p;
-		memcpy(x[0], swap, (x[1] - swap) * sizeof(pbs_dat_t));
-		free(swap);
+		c[b] += l;
 	}
+	// one round of radix sort; this sorts d by d[i].r
+	swap = (pbs_dat_t*)malloc(r * sizeof(pbs_dat_t));
+	for (t = d; t != end && t->b == 0; ++t); // skip those with bit 0; these won't be changed during sorting
+	// the following two loops is the fission of "for (p = d; p != end; ++p) *x[p->b]++ = *p;"
+	x[0] = t, x[1] = swap;
+	for (p = t; p != end; ++p) if (p->b != 0) *x[1]++ = *p;
+	for (p = t; p != end; ++p) if (p->b == 0) *x[0]++ = *p;
+	memcpy(x[0], swap, (x[1] - swap) * sizeof(pbs_dat_t));
+	free(swap);
 	return n1;
 }
 
