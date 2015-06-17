@@ -17,8 +17,6 @@ void *bed_read(const char *fn);
 int bed_overlap(const void *_h, const char *chr, int beg, int end);
 void bed_destroy(void *_h);
 
-void ks_introsort_uint64_t(size_t n, uint64_t a[]);
-
 /************
  * BGT file *
  ************/
@@ -102,7 +100,7 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 	bgt->bcf = bgzf_open(fn, "rb");
 	bgt->b0 = bcf_init1();
 	bcf_seekn(bgt->bcf, bgt->f->idx, 0);
-	bgt->flag = (uint32_t*)calloc(bgt->f->f->n_rows, 4);
+	bgt->gtag = (uint32_t*)calloc(bgt->f->f->n_rows, 4);
 	free(fn);
 	return bgt;
 }
@@ -110,7 +108,7 @@ bgt_t *bgt_reader_init(const bgt_file_t *bf)
 void bgt_reader_destroy(bgt_t *bgt)
 {
 	bcf_destroy1(bgt->b0);
-	free(bgt->flag); free(bgt->group); free(bgt->out);
+	free(bgt->gtag); free(bgt->group); free(bgt->out);
 	if (bgt->h_out) bcf_hdr_destroy(bgt->h_out);
 	hts_itr_destroy(bgt->itr);
 	pbf_close(bgt->pb);
@@ -127,9 +125,9 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 
 	if (n == BGT_SET_ALL_SAMPLES) {
 		for (i = 0; i < f->n_rows; ++i)
-			bgt->flag[i] |= 1<<bgt->n_groups;
+			bgt->gtag[i] = 1;
 		size = f->n_rows;
-		++bgt->n_groups;
+		bgt->n_groups = 1;
 	} else if (n > 0 || expr != 0) {
 		int err, absent;
 		khash_t(s2i) *h;
@@ -153,7 +151,7 @@ int bgt_add_group_core(bgt_t *bgt, int n, char *const* samples, const char *expr
 				int mgs = bgt->f->mgs[i] >= 0? bgt->f->mgs[i] : bgt->mgs_def;
 				if (mgs == 1 || mgs == 0) to_add = 1;
 			}
-			if (to_add) ++size, bgt->flag[i] |= 1<<bgt->n_groups;
+			if (to_add) ++size, bgt->gtag[i] = bgt->n_groups + 1;
 		}
 		kh_destroy(s2i, h);
 		ke_destroy(ke);
@@ -214,11 +212,12 @@ void bgt_prepare(bgt_t *bgt)
 
 	if (bgt->n_groups == 0) bgt_add_group_core(bgt, BGT_SET_ALL_SAMPLES, 0, 0);
 	for (i = 0, bgt->n_out = 0; i < f->n_rows; ++i)
-		if (bgt->flag[i]) ++bgt->n_out;
+		if (bgt->gtag[i] > 0) ++bgt->n_out;
 	bgt->out = (int*)realloc(bgt->out, bgt->n_out * sizeof(int));
 	bgt->group = (uint32_t*)realloc(bgt->group, bgt->n_out * 4);
 	for (i = 0, bgt->n_out = 0; i < f->n_rows; ++i)
-		if (bgt->flag[i]) bgt->out[bgt->n_out] = i, bgt->group[bgt->n_out++] = bgt->flag[i];
+		if (bgt->gtag[i] > 0)
+			bgt->group[bgt->n_out] = bgt->gtag[i], bgt->out[bgt->n_out++] = i;
 
 	// build ->h_out VCF header
 	if (bgt->h_out) bcf_hdr_destroy(bgt->h_out);
@@ -678,26 +677,14 @@ int bgtm_prepare(bgtm_t *bm)
 
 int bgtm_test_mgs(const bgtm_t *bm)
 {
-	int n = bm->n_out, i, j, start;
-	uint64_t *x, last = 0;
-	const uint32_t *group = bm->group;
-	const int32_t *mgs = bm->mgs;
-	x = (uint64_t*)calloc(n, 8);
-	for (i = 0; i < n; ++i)
-		x[i] = (uint64_t)group[i]<<32 | mgs[i];
-	ks_introsort_uint64_t(n, x);
-	last = x[0]>>32, start = 0;
-	for (i = 1; i <= n; ++i) {
-		if (i == n || x[i]>>32 != last) {
-			for (j = start; j < i; ++j)
-				if ((uint32_t)x[j] > i - start)
-					break;
-			if (j != i) break;
-			start = i;
-		}
-	}
-	free(x);
-	return (i > n);
+	int i, cnt[BGT_MAX_GROUPS];
+	memset(cnt, 0, BGT_MAX_GROUPS * sizeof(int));
+	for (i = 0; i < bm->n_out; ++i)
+		++cnt[bm->group[i]-1];
+	for (i = 0; i < bm->n_out; ++i)
+		if (bm->mgs[i] > cnt[bm->group[i]-1])
+			return 0;
+	return 1;
 }
 
 /*** read into BCF ***/
@@ -757,26 +744,8 @@ void bgtm_cal_info(const bgtm_t *bm, bgt_info_t *ss)
 	if (bm->n_groups > 1) {
 		int32_t gcnt[BGT_MAX_GROUPS][4];
 		memset(gcnt, 0, 4 * BGT_MAX_GROUPS * 4);
-		// the following two blocks achieve the same goal. The 1st is faster if there are not many samples
-		if (bm->n_out<<1 < 1024) {
-			int32_t j;
-			for (i = 0; i < bm->n_out<<1; ++i) {
-				int ht = bm->a[1][i]<<1 | bm->a[0][i];
-				if (bm->group[i>>1])
-					for (j = 0; j < bm->n_groups; ++j)
-						if (bm->group[i>>1] & 1<<j) ++gcnt[j][ht];
-			}
-		} else {
-			int32_t j, k, gcnt256[256][4];
-			memset(gcnt256, 0, 256 * 4 * 4);
-			for (i = 0; i < bm->n_out<<1; ++i)
-				++gcnt256[bm->group[i>>1]][bm->a[1][i]<<1 | bm->a[0][i]];
-			for (i = 0; i < 256; ++i)
-				for (j = 0; j < bm->n_groups; ++j)
-					if (i & 1<<j)
-						for (k = 0; k < 4; ++k)
-							gcnt[j][k] += gcnt256[i][k];
-		}
+		for (i = 0; i < bm->n_out<<1; ++i)
+			++gcnt[bm->group[i>>1]-1][bm->a[1][i]<<1 | bm->a[0][i]];
 		for (i = 0; i < bm->n_groups; ++i) {
 			ss->gan[i] = gcnt[i][0] + gcnt[i][1] + gcnt[i][3];
 			ss->gac[i][0] = gcnt[i][1];

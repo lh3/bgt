@@ -31,7 +31,7 @@ typedef struct {
 	hts_itr_t *itr;
 	const void *bed;
 	int bed_excl, n_out, n_groups, mgs_def, *out;
-	uint32_t *group, *flag;
+	uint32_t *group, *gtag;
 	bcf_hdr_t *h_out;
 	const void *h_al; // hash table for alleles; to be set by bgtm
 } bgt_t;
