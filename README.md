@@ -40,8 +40,8 @@ curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
   - [BGT server](#server)
     - [Privacy](#privacy)
 - [Further Notes](#notes)
-  - [Performance evaluation](#perf)
   - [Other genotype formats](#others)
+  - [Performance evaluation](#perf)
 
 ## <a name="guide"></a>Users' Guide
 
@@ -225,6 +225,26 @@ default MGS is applied.
 
 ## <a name="notes"></a>Further Notes
 
+### <a name="others"></a>Other genotype formats
+
+* BGT vs [PBWT][pbwt]. BGT uses the same data structure as PBWT and is inspired
+  by PBWT. PBWT supports advanced query such as haplotype matching, phasing
+  and imputation, while BGT puts more emphasis on fast random access and data
+  retrieval.
+
+* BGT vs [BCF2][vcf]. BCF is more versatile. It is able to keep per-genotype
+  meta information (e.g. per-genotype read depth and genotype likelihood). BGT
+  is generally more efficient and times smaller. It scales better to many
+  samples. BGT also supports more flexible queries, although technically,
+  nothing prevents us from implementing similar functionalities on top of BCF.
+
+* BGT vs [GQT][gqt]. GQT should be much faster on traversing sites across whole
+  chromosomes without considering LD. It is however inefficient to retrieve
+  data in small regions or to get haplotype information due to its design.
+  For this reason, GQT is regarded as a complement to BCF or BGT, not a
+  replacement. On file size, GQT is usually larger than genotype-only BCF and
+  is thus larger than BGT.
+
 ### <a name="perf"></a>Performance evaluation
 
 The test is run on the first release of [Haplotype Reference Consortium][hrc]
@@ -251,6 +271,7 @@ larger than PBWT primarily because BGT keeps an extra bit per haplotype to
 distinguish reference and multi allele, and stores markers to enable fast
 random access.
 
-### <a name="others"></a>Other genotype formats
-
 [hrc]: http://www.haplotype-reference-consortium.org
+[gqt]: https://github.com/ryanlayer/gqt
+[pbwt]: https://github.com/richarddurbin/pbwt
+[vcf]: https://samtools.github.io/hts-specs/
