@@ -46,10 +46,9 @@ curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
 ## <a name="guide"></a>Users' Guide
 
 BGT is a compact file format for efficiently storing and querying whole-genome
-genotypes of tens to hundreds of samples. It can be considered as an alternative
-to BCFv2 but it ignores per-genotype metadata other than genotypes. In
-comparison to BCFv2, BGT is more compact, more efficient for sample subsetting,
-and supports sample metadata and allele annotations.
+genotypes of tens to hundreds of thousands of samples. It can be considered as
+an alternative to genotype-only BCFv2. BGT is more compact in size, more
+efficient to process, and more flexible on query.
 
 BGT comes with a command line tool and a web application which largely mirrors
 the command line uses. The tool supports expressive and powerful query syntax.
