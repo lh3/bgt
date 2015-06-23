@@ -176,28 +176,28 @@ computing allele counts and outputting VCF.
 We use the following command line to demonstrate the query syntax of BGT:
 \begin{center}\footnotesize
 \begin{verbatim}
-  bgt view -G -d var.fmf.gz -a'CDSpos>0' -r11 \
+  bgt view -G -d var.fmf.gz -a'gene=="BRCA1"' \
     -s 'source=="IBD"' -s 'source=="1000G"' \
-    -f 'AC1/AN1>=0.001&&AC2==0' \
+    -f 'AC1/AN1>=0.001&&AC2/AN2>=0.001' \
    HRC-r1.bgt
 \end{verbatim}
 \end{center}
 It finds chr11 coding variants annotated in `var.fmf.gz' that have $\ge$0.1\%
 frequency in the IBD data set (http://www.ibdresearch.co.uk) but absent from
 1000 Genomes~\citep{1000-Genomes-Project-Consortium:2012aa}. In this command line, {\tt -G} disables the output of genotypes.
-Option {\tt -r} sets the chromosome and {\tt -a} selects variants has a
-positive `CDSpos' attribute according to the variant database specified with
-{\tt -d}.  These conditions are indepenent of sample genotypes. Each option
-{\tt -s} selects a group of samples, again independent of sample genotypes.
-For the \char35-th sample group/{\tt -s}, BGT counts the total number of called
-alleles and the number of non-reference alleles and writes them to the {\tt
-AN\char35} and {\tt AC\char35} aggregate variables, respectively. Option {\tt
--f} then use these aggregate variables for further site filtering.
+Option {\tt -a} selects variants with the `gene' attribute equal to `BRCA1'
+according to the variant database specified with {\tt -d}. This condition
+is indepenent of sample genotypes. Each option {\tt -s} selects a group of
+samples, again independent of sample genotypes.  For the \char35-th sample
+group/{\tt -s}, BGT counts the total number of called alleles and the number of
+non-reference alleles and writes them to the {\tt AN\char35} and {\tt
+AC\char35} aggregate variables, respectively. Option {\tt -f} then use these
+aggregate variables to filter output.
 
-The command line above takes 71 CPU seconds with 25 seconds on extracting
-variants from {\tt var.fmf.gz}. BGT server loads this file into memory to
-alleviate the overhead, but this is not an ideal solution. Technically, it
-would be preferred to store variant annotations in a proper database.
+This command line takes 12 CPU seconds with most of time spent on reading
+through the variant annotation file to find matching alleles. The BGT server
+reads the entire file into memory to alleviate the overhead, but a better
+solution would be to set up a proper database for variant annotations.
 
 \section{Discussions}
 
