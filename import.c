@@ -7,7 +7,7 @@
 
 int main_import(int argc, char *argv[])
 {
-	int i, j, c, clevel = -1, flag = 0, id_GT = -1;
+	int i, j, c, clevel = -1, flag = 0, id_GT = -1, gen_pb1 = 0;
 	char *fn_ref = 0, moder[8], modew[8];
 	char *prefix, *fn;
 	uint8_t *bits[2], *bit1;
@@ -15,12 +15,13 @@ int main_import(int argc, char *argv[])
 	htsFile *in, *out;
 	bcf_hdr_t *h0;
 	FILE *fp;
-	pbf_t *pb, *pb1;
+	pbf_t *pb, *pb1 = 0;
 	bcf_atombuf_t *ab;
 	const bcf_atom_t *a;
 
-	while ((c = getopt(argc, argv, "l:SFt:")) >= 0) {
+	while ((c = getopt(argc, argv, "1l:SFt:")) >= 0) {
 		switch (c) {
+		case '1': gen_pb1 = 1; break;
 		case 'l': clevel = atoi(optarg); flag |= 2; break;
 		case 'S': flag |= 1; break;
 		case 't': fn_ref = optarg; flag |= 1; break;
@@ -33,6 +34,7 @@ int main_import(int argc, char *argv[])
 		fprintf(stderr, "  -S           input is VCF\n");
 		fprintf(stderr, "  -t FILE      list of reference names and lengths [null]\n");
 		fprintf(stderr, "  -F           keep filtered variants\n");
+		fprintf(stderr, "  -1           generate .pb1 file (not used for now)\n");
 		return 1;
 	}
 	prefix = argv[optind];
@@ -67,9 +69,10 @@ int main_import(int argc, char *argv[])
 	bits[0] = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
 	bits[1] = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
 
-	// prepare PBF to write
-	sprintf(fn, "%s.pb1", prefix);
-	pb1 = pbf_open_w(fn, ab->h->n[BCF_DT_SAMPLE]*2, 1, 13);
+	if (gen_pb1) {
+		sprintf(fn, "%s.pb1", prefix);
+		pb1 = pbf_open_w(fn, ab->h->n[BCF_DT_SAMPLE]*2, 1, 13);
+	}
 	bit1 = (uint8_t*)calloc(ab->h->n[BCF_DT_SAMPLE]*2, 1);
 
 	// write site-only BCF header
@@ -95,7 +98,7 @@ int main_import(int argc, char *argv[])
 				bit1[i] = (a->gt[i] == 1);
 			}
 			pbf_write(pb, bits);
-			pbf_write(pb1, &bit1);
+			if (pb1) pbf_write(pb1, &bit1);
 			bcf_subset(h0, b, 0, 0);
 			vcf_write1(out, h0, b);
 			++n;
@@ -106,8 +109,9 @@ int main_import(int argc, char *argv[])
 	}
 
 	hts_close(out);
-	pbf_close(pb1); free(bit1);
-	pbf_close(pb);  free(bits[0]); free(bits[1]);
+	free(bit1); free(bits[0]); free(bits[1]);
+	if (pb1) pbf_close(pb1);
+	pbf_close(pb);
 	bcf_hdr_destroy(h0);
 
 	bcf_index_build(fn, 14);
