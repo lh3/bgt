@@ -15,7 +15,7 @@ gzip -dc 1kg11-1M.raw.samples.gz > 1kg11-1M.bgt.spl  # sample meta data
 ./bgt view -s'population=="CEU"' -s'population=="YRI"' -f'AC1/AN1>=0.1&&AC2==0' -G 1kg11-1M.bgt
 # Select high-impact sites (var annotation provided with -d)
 ./bgt view -d anno11-1M.fmf.gz -a'impact=="HIGH"' -CG 1kg11-1M.bgt
-# Server and client
+# Server and client (requiring the Go compiler)
 go build bgt-server.go
 GOMAXPROCS=4 ./bgt-server -d anno11-1M.fmf.gz 1kg11-1M.bgt 2> server.log &
 curl -s '0.0.0.0:8000' | less -S  # help
