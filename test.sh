@@ -11,7 +11,7 @@ if [ ! -f 1kg11-1M.raw.bcf ] || [ ! -f 1kg11-1M.raw.samples.gz ] || [ ! -f anno1
 fi
 
 MD5=md5sum
-which md5sum
+which md5sum > /dev/null
 if [ $? -ne 0 ]; then
 	MD5="md5 -r"
 fi
@@ -22,10 +22,10 @@ gzip -dc 1kg11-1M.raw.samples.gz > 1kg11-1M.bgt.spl
 
 echo "MESSAGE: computing checksum of various queries..."
 $MD5 1kg11-1M.bgt.bcf | awk '{print $1}'
-$EXE view -C 1kg11-1M.bgt | $MD5
-$EXE view -s,HG00171,HG00173 -f'AC>0' -r 11:100000-200000 1kg11-1M.bgt | $MD5
-$EXE view -s'population=="CEU"' -s'population=="YRI"' -f'AC1/AN1>=0.1&&AC2==0' -G 1kg11-1M.bgt | $MD5
-$EXE view -d anno11-1M.fmf.gz -a'impact=="HIGH"' -CG 1kg11-1M.bgt | $MD5
+$EXE view -C 1kg11-1M.bgt | $MD5 | awk '{print $1}'
+$EXE view -s,HG00171,HG00173 -f'AC>0' -r 11:100000-200000 1kg11-1M.bgt | $MD5 | awk '{print $1}'
+$EXE view -s'population=="CEU"' -s'population=="YRI"' -f'AC1/AN1>=0.1&&AC2==0' -G 1kg11-1M.bgt | $MD5 | awk '{print $1}'
+$EXE view -d anno11-1M.fmf.gz -a'impact=="HIGH"' -CG 1kg11-1M.bgt | $MD5 | awk '{print $1}'
 
 echo -e "\nCorrect checksum should be:"
 echo 03cc454d4495500061a82ebe341b89ef
