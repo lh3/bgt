@@ -385,6 +385,9 @@ func bgs_fmf_keys(f *C.fmf_t) ([]string) {
  *****************/
 
 func main() {
+	if os.Getenv("PORT") != "" {
+		bgt_port = os.Getenv("PORT");
+	}
 	// parse command line options
 	for {
 		opt, arg := getopt(os.Args, "d:p:m:g:");
