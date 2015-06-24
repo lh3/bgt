@@ -329,6 +329,7 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 
 	// read through
 	b := C.bcf_init1();
+	defer C.bcf_destroy1(b);
 	n_read := 0;
 	for {
 		if n_read > max_read || uint64(bm.n_gt_read) > bgt_max_gt {
@@ -349,7 +350,6 @@ func bgs_query(w http.ResponseWriter, r *http.Request) {
 		}
 		n_read += 1;
 	}
-	C.bcf_destroy1(b);
 
 	// print hapcnt and/or sample list
 	if !vcf_out && int(bm.n_aal) > 0 {
