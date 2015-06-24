@@ -1,4 +1,17 @@
 ## <a name="started"></a>Getting Started
+
+#### Connect to a public BGT server
+```sh
+curl -s 'http://bgtdemo.herokuapp.com/'
+curl -s 'http://bgtdemo.herokuapp.com/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
+curl -s 'http://bgtdemo.herokuapp.com/?t=CHROM,POS,END,REF,ALT,AC/AN&f=(AC>1)&r=20'
+```
+For the last query, the last line is "*", indicating the result is incomplete.
+Note that this web app is using Heroku's free tier. It uses one CPU only and is
+put to sleep when the app is idle. Heroku also forces free app to sleep for "6
+hours in a 24 hour period". I don't know how exactly this works.
+
+#### Run BGT locally
 ```sh
 # Installation
 git clone https://github.com/lh3/bgt.git
@@ -15,8 +28,12 @@ gzip -dc 1kg11-1M.raw.samples.gz > 1kg11-1M.bgt.spl  # sample meta data
 ./bgt view -s'population=="CEU"' -s'population=="YRI"' -f'AC1/AN1>=0.1&&AC2==0' -G 1kg11-1M.bgt
 # Select high-impact sites (var annotation provided with -d)
 ./bgt view -d anno11-1M.fmf.gz -a'impact=="HIGH"' -CG 1kg11-1M.bgt
-# Server and client (requiring the Go compiler)
-go build bgt-server.go
+```
+
+#### Set up your web server
+```sh
+# Compile the server; Go compiler required
+make bgt-server
 GOMAXPROCS=4 ./bgt-server -d anno11-1M.fmf.gz 1kg11-1M.bgt 2> server.log &
 curl -s '0.0.0.0:8000' | less -S  # help
 curl -s '0.0.0.0:8000/?a=(impact=="HIGH")&s=(population=="FIN")&f=(AC>0)'
