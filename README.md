@@ -7,9 +7,10 @@ curl -s 'http://bgtdemo.herokuapp.com/?a=(impact=="HIGH")&s=(population=="FIN")&
 curl -s 'http://bgtdemo.herokuapp.com/?t=CHROM,POS,END,REF,ALT,AC/AN&f=(AC>1)&r=20'
 ```
 For the last query, the last line is "*", indicating the result is incomplete.
-Note that this web app is using Heroku's free tier. It uses one CPU only and is
-put to sleep when the app is idle. Heroku also forces free app to sleep for "6
-hours in a 24 hour period". I don't know how exactly this works.
+Note that this web app is using Heroku's free tier. It is restricted to one CPU
+only and put to sleep when the app is idle. There is an overhead of wakeup.
+Heroku also forces free apps to sleep for "6 hours in a 24 hour period". I
+don't know how exactly this works.
 
 #### Run BGT locally
 ```sh
