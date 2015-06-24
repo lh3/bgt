@@ -1,4 +1,4 @@
-\newcommand\classname{bioinfo2}
+\newcommand\classname{bioinfo}
 \newcommand\lastmodifieddate{2003/02/08}
 \newcommand\versionnumber{0.1}
 
@@ -454,7 +454,7 @@
   \vspace*{\aboveskipchk}%
   \vspace{\dropfromtop}%
   \hbox to \textwidth{%
-  {\helvetica\itshape\bfseries\fontsize{19}{12}\selectfont {\color{gray}PREPRINT}
+  {\helvetica\itshape\bfseries\fontsize{19}{12}\selectfont {\color{gray}BIOINFORMATICS}
     \hfil
     \if@appnotes APPLICATIONS NOTE\hfil\fi
     }%
@@ -475,9 +475,9 @@
         \vspace{4\p@}
     {\helvetica\fontsize{10}{12}\selectfont\raggedright \@address \par}%
     \vspace{4\p@}
-    %{\helvetica\fontsize{8}{10}\selectfont\raggedright \@history \par}
-    %\vspace{24\p@}
-    %{\helvetica\fontsize{10}{12}\selectfont\raggedright \@editor \par}
+    {\helvetica\fontsize{8}{10}\selectfont\raggedright \@history \par}
+    \vspace{24\p@}
+    {\helvetica\fontsize{10}{12}\selectfont\raggedright \@editor \par}
     %\vspace{20\p@}
     }%
   }

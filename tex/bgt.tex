@@ -27,8 +27,9 @@
 simple web application for efficiently and conveniently querying whole-genome
 genotypes and frequencies across tens to hundreds of thousands of samples.
 On real data, it compresses the genotypes of 32,488 samples across 39.2
-million sites down to a 7.4GB database and processes a couple of hundred
-million genotypes per CPU second.
+million SNPs down to a 7.4GB database and processes a couple of hundred
+million genotypes per CPU second. The high performance enables real-time
+responses to complex queries.
 
 \section{Availability and implementation:} https://github.com/lh3/bgt
 
@@ -40,7 +41,7 @@ million genotypes per CPU second.
 VCF/BCF~\citep{Danecek:2011qy} is the primary format for storing and analyzing
 genotypes of multiple samples.  It however has a few issues. Firstly, as a
 streaming format, VCF compresses all types of information together. Retrieving
-site annotations or the genotypes of a few samples usually requires to decoding
+site annotations or the genotypes of a few samples usually requires to decode
 the genotypes of all samples, which is unnecessarily expensive. Secondly, VCF
 does not take advantage of linkage disequillibrium (LD), while using this
 information can dramatically improve compression ratio~\citep{Durbin:2014yq}.
@@ -49,8 +50,11 @@ multiple alleles with each allele composed of multiple SNPs and INDELs. This
 ambiguity complicates annotations, query of alleles and integration of multiple
 data sets. At last, most existing VCF-based tool chains do not support
 expressive data query.  We frequently need to write scripts for advanced
-queries, which costs both development and processing time. BGT is designed to
-overcome or alleviate these issues.
+queries, which costs both development and processing time.
+GQT~\citep{Ruan:2015ab} attempts to solve some of these issues. While it is
+very fast for selecting a subset of samples and for traversing all sites, it
+discards phasing, is inefficient for region query and is not compressed well.
+These observations motivated us to develop BGT.
 
 \begin{methods}
 \section{Methods}
@@ -110,18 +114,19 @@ $B_k\to\phi_k\to S_k$, starting from $k=0$. Conversely, given $B_k$ and
 $S_{k-1}$, computing $\phi_k\to S_k\to A_k$ derives $A_k$ from $B_k$.
 
 When there are strong correlations between adjacent rows, which is true for
-haplotype data due to linkage disequillibrium, $0$s and $1$s tend to form long
+haplotype data due to LD, $0$s and $1$s tend to form long
 runs in $B_k$. This usually makes $B_k$ much more compressible than $A_k$ under
-run-length encoding. For our test data set, 32 thousand samples can be
-compressed to less than 200 bytes in average.
+run-length encoding. For our test data set, 32 thousand genotypes in a row can
+be compressed to less than 200 bytes in average.
 
 \subsection{Query with BGT}
 
 \subsubsection{Flat Metadata Format (FMF)}
 
-BGT introduces a new but simple text format, FMF, to manage meta data. FMF is
-TAB-delimited with the first column showing the row name and following columns
-giving typed key-value pairs. An example looks like:
+BGT introduces a new but simple text format, FMF, to manage meta data. FMF has
+a similar data model to wide-column stores. It is TAB-delimited with the first
+column showing the row name and following columns giving typed key-value pairs.
+An example looks like:
 \begin{center}
 \begin{verbatim}
   sample1   gender:Z:M   height:f:1.73   foo:i:10
@@ -129,8 +134,8 @@ giving typed key-value pairs. An example looks like:
 \end{verbatim}
 \end{center}
 where rows can be retrieved by an arbitrary expression such as
-``height$>$1.65''. It has a similar data model to wide-column databases. BGT
-uses FMF to keep and query sample phenotypes and variant annotations.
+``height$>$1.65''. BGT uses FMF to keep and query sample phenotypes and variant
+annotations.
 
 \subsubsection{Query genotypes}
 
@@ -155,22 +160,23 @@ implement with a pure SQL backend.
 BGT comes with a standalone web server frontend implemented in the Go
 programming language. The server has a similar interface to the command line
 tool, but with additional consideration of sample anonymity. With BGT,
-each sample has an attribute minimal group size or MGS. On query, the server
+each sample has an attribute `minimal group size' or MGS. On query, the server
 refuses to create a sample group if the size of this group is smaller than the
 MGS of one sample in this group. In particular, if a sample has MGS larger than
 one, users cannot access its sample name and individual genotypes, but can
-retrieve allele counts computed together with other samples.
+retrieve allele counts computed together with other samples. This prevents
+users to access data at the level of a single sample.
 
 \end{methods}
 
 \section{Results}
 
 We generated the BGT database for the first release of Haplotype Reference
-Consortium (HRC; http://bit.ly/HRC-org). The input is a BCF containing 32,488 samples across 39.2
-million sites on autosomes. The BGT file size is 7.4GB, 11\% of the
-genotype-only BCF. Decoding the genotypes of all
-samples across 142k sites in a 10Mbp region takes 11 CPU seconds, which amounts
-to decoding 420 million genotypes per second. This speed is even faster than
+Consortium (HRC; http://bit.ly/HRC-org). The input is a BCF containing 32,488
+samples across 39.2 million SNPs on autosomes. The BGT file size is 7.4GB, 11\%
+of the genotype-only BCF, or 8\% of GQT. Decoding the genotypes of all samples
+across 142k sites in a 10Mbp region takes 11 CPU seconds, which amounts to
+decoding 420 million genotypes per second. This speed is even faster than
 computing allele counts and outputting VCF.
 
 We use the following command line to demonstrate the query syntax of BGT:
@@ -182,19 +188,19 @@ We use the following command line to demonstrate the query syntax of BGT:
    HRC-r1.bgt
 \end{verbatim}
 \end{center}
-It finds chr11 coding variants annotated in `var.fmf.gz' that have $\ge$0.1\%
-frequency in the IBD data set (http://www.ibdresearch.co.uk) but absent from
+It finds BRCA1 variants annotated in `var.fmf.gz' that have $\ge$0.1\%
+frequency in both the IBD data set (http://www.ibdresearch.co.uk) and
 1000 Genomes~\citep{1000-Genomes-Project-Consortium:2012aa}. In this command line, {\tt -G} disables the output of genotypes.
 Option {\tt -a} selects variants with the `gene' attribute equal to `BRCA1'
 according to the variant database specified with {\tt -d}. This condition
 is indepenent of sample genotypes. Each option {\tt -s} selects a group of
-samples, again independent of sample genotypes.  For the \char35-th sample
+samples based on phenotypes.  For the \char35-th sample
 group/{\tt -s}, BGT counts the total number of called alleles and the number of
 non-reference alleles and writes them to the {\tt AN\char35} and {\tt
 AC\char35} aggregate variables, respectively. Option {\tt -f} then use these
 aggregate variables to filter output.
 
-This command line takes 12 CPU seconds with most of time spent on reading
+The command line above takes 12 CPU seconds with most of time spent on reading
 through the variant annotation file to find matching alleles. The BGT server
 reads the entire file into memory to alleviate the overhead, but a better
 solution would be to set up a proper database for variant annotations.
@@ -202,25 +208,22 @@ solution would be to set up a proper database for variant annotations.
 \section{Discussions}
 
 Given a multi-sample VCF, most BGT functionalities can be achieved with small
-scripts. However, as a command line tool, BGT is still an advance in several
-ways. Firstly, it saves development time. Extracting information from multiple
-files can be done with a command line instead of a script.  Secondly,
+scripts, but as a command line tool, BGT still has a few advantages. Firstly, it
+saves development time. Extracting information from multiple files can be done
+with a command line instead of a script.  Secondly,
 BGT saves processing time. With high-performance C code at the core, BGT is
 much faster than processing VCF in a scripting language such as Perl or Python.
 For example, deriving allele counts in a 10Mbp region for the HRC data takes 30
 seconds with BGT, but doing the same with a Perl script takes 40 minutes, a
 80-fold difference. Thirdly, the design of one non-reference allele per record
-and the separation of variant annotation from genotype data helps more scalable
-data processing. These design choices make BGT merge is much simpler and faster
-than generic VCF merge. This enables efficient query across multiple BGT
-databases which is not practical with VCF.
+makes BGT merge much simpler and faster than generic VCF merge. This enables
+efficient query across multiple BGT databases which is not practical with VCF.
 
-The BGT server tries to solve a bigger problem: data sharing. A key feature of
-the server is to make the user-requested summary of genotypes available while
-keeping samples unidentifiable~\citep{Stade:2014ty}. Instead of always
+The BGT server tries to solve a bigger problem: data sharing. Instead of always
 delivering full data in VCF, projects could have a new option to serve data
-publicly with BGT, letting users select the summary statistics of interest
-without breaching privacy.
+publicly with the BGT server, letting users select the summary statistics of interest
+on the fly while keeping samples unidentifiable. This is an improvement to
+\citet{Stade:2014ty} which only provide precomputed summary.
 
 % summary data is smaller, but genotypes in PBWT is not large, either.
 
@@ -228,13 +231,14 @@ We acknowledge that our MGS-based data sharing policy might have oversimplified
 real scenarios, but we believe this direction, with proper improvements and
 more importantly the approval of ethical review boards, will be more open,
 convenient, efficient and secure than our current
-share-everything-with-permission model.
+share-everything-under-permission model.
 
 \section*{Acknowledgement}
 I am grateful to HRC for granting the permission to use the data for evaluating
-the performance of BGT and thank the Global Alliance for the helpful
-suggestions.
+the performance of BGT and thank the Global Alliance Data Working Group for the
+helpful suggestions.
 \paragraph{Funding\textcolon} NHGRI U54HG003037; NIH GM100233
 
 \bibliography{bgt}
+
 \end{document}

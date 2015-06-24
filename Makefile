@@ -22,6 +22,9 @@ libbgt.a:$(OBJS)
 bgt:libbgt.a main.o import.o view.o
 		$(CC) main.o import.o view.o -o $@ $(LIBS)
 
+bgt-server:bgt-server.go libbgt.a
+		go build bgt-server.go
+
 pbfview:pbfview.o pbwt.o
 		$(CC) $^ -o $@
 
