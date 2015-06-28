@@ -58,7 +58,7 @@ Due to the way `gt` is defined, sum of `gt` gives the count of non-reference all
 We can use `GROUP BY` and [aggregate functions][aggfunc] to do computation on
 genotypes.
 ```sql
--- get non-ref allele count for all variants
+-- get non-ref allele count for each variant
 SELECT vid,SUM(gt) -- SUM of gt grouped by vid
   FROM Genotype
  GROUP BY vid;
@@ -70,7 +70,7 @@ SELECT vid,GROUP_CONCAT(sid)
 ```
 We can set conditions on aggregate functions using the `HAVING` clause:
 ```sql
--- get TP53 or CDC2 variants with allele count over 2
+-- get variants with allele count over 2
 SELECT g.vid
   FROM Genotype g
  GROUP BY g.vid
@@ -123,24 +123,26 @@ sqlite3 < test.sql
 ```
 SQL statements:
 ```sql
+-- Schema
+
 DROP TABLE IF EXISTS Variant;
 CREATE TABLE Variant (
 	vid  TEXT,
 	gene TEXT
 );
-
 DROP TABLE IF EXISTS Sample;
 CREATE TABLE Sample (
 	sid TEXT,
 	age REAL
 );
-
 DROP TABLE IF EXISTS Genotype;
 CREATE TABLE Genotype (
 	vid TEXT,
 	sid TEXT,
 	gt  INT
 );
+
+-- Put data
 
 INSERT INTO Variant VALUES ("V1", "TP53");
 INSERT INTO Variant VALUES ("V2", "CDK2");
@@ -155,6 +157,8 @@ INSERT INTO Genotype VALUES ("V1", "S3", 0);
 INSERT INTO Genotype VALUES ("V2", "S1", 0);
 INSERT INTO Genotype VALUES ("V2", "S2", 0);
 INSERT INTO Genotype VALUES ("V2", "S3", 1);
+
+-- Query examples
 
 SELECT vid FROM Variant WHERE gene="TP53";
 
