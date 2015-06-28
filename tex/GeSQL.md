@@ -109,6 +109,9 @@ A standard SQL engine is not efficient enough to handle these many rows and
 to compute aggregate. We need to mimic the behavior of this `Genotype` table
 with another data structure.
 
+It is not obvious how to return genotypes. One possible solution is to
+introduce a `VCF()` aggregate function that output results in VCF.
+
 ### Acknowledgement
 
 The idea of SQL-based genotype query is inspired by [GEMINI][gemini] and
