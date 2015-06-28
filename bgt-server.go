@@ -408,7 +408,7 @@ func main() {
 	if optind == len(os.Args) {
 		fmt.Fprintln(os.Stderr, "Usage: bgt-server [options] <bgt.pre1> [...]");
 		fmt.Fprintln(os.Stderr, "Options:");
-		fmt.Fprintf(os.Stderr, "  -p INT    port number [%s]\n", bgt_port);
+		fmt.Fprintf(os.Stderr, "  -p INT    port number [%s or from $PORT env]\n", bgt_port);
 		fmt.Fprintf(os.Stderr, "  -m INT    maximal genotypes processed per query [%d]\n", bgt_max_gt);
 		fmt.Fprintf(os.Stderr, "  -d FILE   variant annotations in the FMF format []\n");
 		fmt.Fprintf(os.Stderr, "  -g INT    minimal sample group size (force -G if positive) [0]\n");
