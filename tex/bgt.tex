@@ -27,7 +27,7 @@
 simple web application for efficient and convenient query of whole-genome
 genotypes and frequencies across tens to hundreds of thousands of samples.
 On real data, it encodes the haplotypes of 32,488 samples across 39.2
-million SNPs into a 7.4GB database and decodes a couple of hundred million
+million SNPs into a 7.4GB database and decodes up to 420 million
 genotypes per CPU second. The high performance enables real-time responses to
 complex queries.
 
@@ -58,28 +58,40 @@ motivated us to develop BGT.
 
 \begin{methods}
 \section{Methods}
-
-\subsection{Design}
-
-\subsubsection{Data model}
-
-BGT keeps diploid genotypes as a 2-bit integer matrix $(H_{ki})$ with row
-indexed by a pair of overlapping reference/non-reference alleles and column by
-a sample haplotype (thus for $m'$ samples, the matrix has $2m'$ columns).
+Unlike VCF which stores sample phenotypes, site annotations and genotypes all
+in one file, BGT separates the three types of information into individual
+files.  BGT keeps diploid genotypes as a 2-bit integer matrix $(H_{ki})$ with
+row indexed by a pair of overlapping reference/non-reference alleles and column
+by a sample haplotype (thus for $m'$ samples, the matrix has $2m'$ columns).
 $H_{ki}$ takes value 0 if the $i$-th haplotype has the reference allele in the
 allele pair at row $k$, takes 1 if the haplotype has the non-reference allele,
 2 if unknown and 3 if the haplotype has a different non-reference allele. BGT
 arbitrarily phases unphased genotypes and always breaks complex variants in VCF
-down to the smallest possible variants. It keeps the allele pairs (i.e. rows)
+down to the smallest possible variants. It keeps the allele pairs (i.e.  rows)
 in a site-only BCF, disallowing multiple alleles per VCF line, and stores the
 integer matrix as two positional BWTs (PBWTs), one for the lower bit and the
 other for the higher bit.
 
-\subsubsection{PBWT overview}
+BGT obtains phenotypes and site annotations from files in the Flat Metadata
+Format (FMF). FMF is TAB-delimted with the first column showing the row name
+and following columns giving typed key-value pairs. An example looks like:
+\begin{center}
+\begin{verbatim}
+  sample1   gender:Z:M   height:f:1.73   foo:i:10
+  sample2   gender:Z:F   height:f:1.64   bar:i:20
+\end{verbatim}
+\end{center}
+BGT can retrieve rows via an arbitrary expression such as ``height$>$1.65''.
 
-PBWT~\citep{Durbin:2014yq} is a generic way to encode binary matrices.  Let $(A_k)_{0\le
-k<n}=(A_0,\ldots,A_{n-1})$ be a list of $m$-long binary strings. $(A_k)_k$ can
-be regarded as an $n\times m$ binary matrix with $A_k[i]$ representing the
+The multi-file design makes BGT unfriendly to data streaming, but it enables
+BGT to use use one set of site annotations across multiple BGT files and allows
+users to modify phenotypes and annotations without re-encoding all the genotypes.
+
+\subsection{PBWT overview}
+
+PBWT~\citep{Durbin:2014yq} is a generic way to encode binary matrices.  Let
+$(A_k)_k=(A_0,\ldots,A_{n-1})$ denote a list of $m$-long binary strings. $(A_k)_k$
+can be regarded as an $n\times m$ binary matrix with $A_k[i]$ representing the
 cell at row $k$ and column $i$.  For simplicity, introduce a sentinel row
 $A_{-1}=\$_0\$_1\cdots\$_{m-1}$ with a lexicographical order
 $\$_0<\cdots<\$_{m-1}$.
@@ -88,12 +100,12 @@ Define binary string:
 \[
 P_{ki}=A_k[i]A_{k-1}[i]\ldots A_0[i]A_{-1}[i]
 \]
-to be the reverse of the column prefix ending at $(k,i)$ and define $S_k(i)$ to
-be the column index of the $i$-th smallest prefix among set $\{P_{kj}\}_j$.
+to be the reverse of the \emph{column prefix} ending at $(k,i)$ and define $S_k(i)$ to
+be the \emph{column index} of the $i$-th smallest prefix among set $\{P_{kj}\}_j$.
 $S_k(i)$ is a bijection on $\{0,\ldots,m-1\}$ and thus invertible. In a
 special case, $S_{-1}(i)=i$ because $P_{-1,i}=A_{-1}[i]=\$_i$.
 
-The PBWT of $(A_k)_{0\le k<n}$ is $(B_k)_{0\le k<n}$, which is
+The PBWT of $(A_k)_k$ is $(B_k)_k$, which is
 calculated by
 \begin{equation*}\label{eq:B}
 B_k[i]=A_k[S_{k-1}(i)]
@@ -119,25 +131,7 @@ runs in $B_k$. This usually makes $B_k$ much more compressible than $A_k$ under
 run-length encoding. For our test data set, 32 thousand genotypes in a row can
 be compressed to less than 200 bytes in average.
 
-\subsection{Query with BGT}
-
-\subsubsection{Flat Metadata Format (FMF)}
-
-BGT introduces a new but simple text format, FMF, to manage meta data. FMF has
-a similar data model to wide-column stores. It is TAB-delimited with the first
-column showing the row name and following columns giving typed key-value pairs.
-An example looks like:
-\begin{center}
-\begin{verbatim}
-  sample1   gender:Z:M   height:f:1.73   foo:i:10
-  sample2   gender:Z:F   height:f:1.64   bar:i:20
-\end{verbatim}
-\end{center}
-where rows can be retrieved by an arbitrary expression such as
-``height$>$1.65''. BGT uses FMF to keep and query sample phenotypes and variant
-annotations.
-
-\subsubsection{Query genotypes}
+\subsection{Query genotypes}
 
 The BGT query system is inspired by SQL.  Notably, BGT can select variants and
 samples with arbitrary conditions on meta data (analogy: the {\sf WHERE} clause
@@ -160,9 +154,9 @@ implement with a pure SQL backend.
 BGT comes with a standalone web server frontend implemented in the Go
 programming language. The server has a similar interface to the command line
 tool, but with additional consideration of sample anonymity. With BGT,
-each sample has an attribute `minimal group size' or MGS. On query, the server
-refuses to create a sample group if the size of this group is smaller than the
-MGS of one sample in this group. In particular, if a sample has MGS larger than
+each sample has an attribute `minimal group size' or MGS. If a query selects a
+group containing a sample with a MGS larger than the requested group size, the
+server will refuse the request. In particular, if a sample has MGS larger than
 one, users cannot access its sample name and individual genotypes, but can
 retrieve allele counts computed together with other samples. This prevents
 users to access data at the level of a single sample.
@@ -209,7 +203,7 @@ To demonstrate the server frontend, we have also set up a public BGT server at
 http://bgtdemo.herokuapp.com. It hosts 1000 Genomes haplotypes for chromosome 11 and
 20.
 
-\section{Discussions}
+\section{Discussion}
 
 Given a multi-sample VCF, most BGT functionalities can be achieved with small
 scripts, but as a command line tool, BGT has a few advantages. Firstly, it
@@ -220,8 +214,8 @@ much faster than processing VCF in a scripting language such as Perl or Python.
 For example, deriving allele counts in a 10Mbp region for the HRC data takes 30
 seconds with BGT, but doing the same with a Perl script takes 40 minutes, a
 80-fold difference. Thirdly, the design of one non-reference allele per record
-makes BGT merge much simpler and faster than generic VCF merge. This enables
-efficient query across multiple BGT databases which is not practical with VCF.
+simplifies BGT merge and makes it twice as fast as bcftools merge on two
+genotype-only input files.
 
 The BGT server tries to solve a bigger problem: data sharing. Instead of always
 delivering full data in VCF, projects could have a new option to serve data
