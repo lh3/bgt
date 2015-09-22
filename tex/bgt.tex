@@ -39,9 +39,10 @@ complex queries.
 \section{Introduction}
 
 VCF/BCF~\citep{Danecek:2011qy} is the primary format for storing and analyzing
-genotypes of multiple samples.  It however has a few issues. Firstly, as a
-streaming format, VCF compresses all types of information together. Retrieving
-site annotations or the genotypes of a few samples usually requires to decode
+genotypes of multiple samples.  It however has a few issues. Firstly, VCF
+is a site-oriented format. While accessing a site and all the associated
+genotypes is efficient with indexing, retrieving
+site annotations or the genotypes of a few samples always requires to decode
 the genotypes of all samples, which is unnecessarily expensive. Secondly, VCF
 does not take advantage of linkage disequilibrium (LD), while using this
 information can dramatically improve compression ratio~\citep{Durbin:2014yq}.
