@@ -132,23 +132,39 @@ runs in $B_k$. This usually makes $B_k$ much more compressible than $A_k$ under
 run-length encoding. For our test data set, 32 thousand genotypes in a row can
 be compressed to less than 200 bytes in average.
 
-\subsection{Query genotypes}
+\subsection{Query genotypes and output}
 
-The BGT query system is inspired by SQL.  Notably, BGT can select variants and
-samples with arbitrary conditions on meta data (analogy: the {\sf WHERE} clause
-in SQL). It has a few built-in aggregate variables such as the allele count of
-selected samples (analogy: the aggregate functions) and can filter output with
-these variables (analogy: the {\sf HAVING} clause). BGT outputs VCF/BCF by
-default, but it may optionally output user requested fields only (analogy:
-fields in the {\sf SELECT} statement). BGT also allows to create multiple
-sample groups with allele count calculated for each group and to set conditions
-on them (see Results), which is inspired by SQL's joining multiple instances of
-the same table in the {\sf FROM} clause.
+A BGT query may consist of three types of conditions: (a)
+genotype-\emph{independent} sample selection, such as a list of sample names
+or an arbitrary expression on phenotypes; (b) genotype-\emph{independent} site
+selection, such as a genomic region, a list of alleles or an arbitrary
+expression on variant annotations; (c) genotype-\emph{dependent} site
+conditions, such as alleles being common among selected samples.
+We may select multiple groups of samples with (a)-typed conditions. For each
+group, BGT will compute aggregate variables, including the number of called
+samples and the allele count, which can be outputted or used in (c)-typed
+conditions.
 
-On the other hand, the query syntax of BGT is very different from SQL. It tends
-to be simpler as BGT only has a few `tables' with fixed relationship. BGT can
-also count haplotypes across a set of variants, which is not easy to
-implement with a pure SQL backend.
+BGT usually outputs VCF/BCF with aggregate variables written to the INFO field.
+It may optionally output a TAB-delimited table on user selected fields. BGT
+may also output the samples having a list of alleles, and the counts of
+haplotypes across requested alleles in multiple sample groups.
+
+%The BGT query system is inspired by SQL.  Notably, BGT can select variants and
+%samples with arbitrary conditions on meta data (analogy: the {\sf WHERE} clause
+%in SQL). It has a few built-in aggregate variables such as the allele count of
+%selected samples (analogy: the aggregate functions) and can filter output with
+%these variables (analogy: the {\sf HAVING} clause). BGT outputs VCF/BCF by
+%default, but it may optionally output user requested fields only (analogy:
+%fields in the {\sf SELECT} statement). BGT also allows to create multiple
+%sample groups with allele count calculated for each group and to set conditions
+%on them (see Results), which is inspired by SQL's joining multiple instances of
+%the same table in the {\sf FROM} clause.
+%
+%On the other hand, the query syntax of BGT is very different from SQL. It tends
+%to be simpler as BGT only has a few `tables' with fixed relationship. BGT can
+%also count haplotypes across a set of variants, which is not easy to
+%implement with a pure SQL backend.
 
 \subsection{BGT server}
 
@@ -188,12 +204,12 @@ frequency in both the IBD data set (http://www.ibdresearch.co.uk) and
 1000 Genomes~\citep{1000-Genomes-Project-Consortium:2012aa}. In this command line, {\tt -G} disables the output of genotypes.
 Option {\tt -a} selects variants with the `gene' attribute equal to `BRCA1'
 according to the variant database specified with {\tt -d}. This condition
-is independent of sample genotypes. Each option {\tt -s} selects a group of
+is a (b)-typed condition independent of sample genotypes. Each option {\tt -s} sets an (a)-typed condition, selecting a group of
 samples based on phenotypes.  For the \char35-th sample
 group/{\tt -s}, BGT counts the total number of called alleles and the number of
 non-reference alleles and writes them to the {\tt AN\char35} and {\tt
 AC\char35} aggregate variables, respectively. Option {\tt -f} then use these
-aggregate variables to filter output.
+aggregate variables to filter output. This is a (c)-typed condition.
 
 The command line above takes 12 CPU seconds with most of time spent on reading
 through the variant annotation file to find matching alleles. The BGT server
