@@ -280,8 +280,7 @@ which has been applied to all command lines below.
 |19s    |bcftools view -Gu -S 1000G.txt HRC-r1.bcf|
 |8s     |bgt view -G -s 'source=="UK10K"' -s 'source=="1000G"&&population!="GBK"'|
 
-On file sizes, the BGT database for HRC-r1 is 7.4GB (this excludes the `.pb1`
-file which is generated but not used for now; 1GB=1024\*1024\*1024 bytes). In comparison,
+On file sizes, the BGT database for HRC-r1 is 7.4GB (1GB=1024\*1024\*1024 bytes). In comparison,
 BCFv2 for the same data takes 65GB, GQT 93GB and PBWT 4.4GB. BGT and PBWT,
 which are based on the same data structure, are much more compact. BGT is
 larger than PBWT primarily because BGT keeps an extra bit per haplotype to
