@@ -115,7 +115,7 @@ void fmf_destroy(fmf_t *f)
 
 char *fmf_write(const fmf_t *f, int r)
 {
-	static char *type_str = "\0ifZ";
+	static const char *type_str = "\0ifZ";
 	kstring_t s = {0,0,0};
 	fmf1_t *u;
 	int i;

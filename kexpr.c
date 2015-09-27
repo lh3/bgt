@@ -77,7 +77,7 @@ static int ke_op[25] = {
 	12<<1 // ||
 };
 
-static char *ke_opstr[] = {
+static const char *ke_opstr[] = {
 	"",
 	"+(1)", "-(1)", "~", "!",
 	"**",
