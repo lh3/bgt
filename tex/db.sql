@@ -67,3 +67,11 @@ SELECT g1.vid,SUM(g1.gt),SUM(g2.gt)
  GROUP BY v.vid
  HAVING SUM(g1.gt)>2 AND SUM(g2.gt)<1;
 
+SELECT g1.vid,SUM(g1.gt),SUM(g2.gt)
+  FROM Genotype g1, Genotype g2
+ WHERE g1.vid IN (SELECT vid FROM Variant WHERE gene="CDK2" OR gene="TP53")
+   AND g1.vid=g2.vid
+   AND g1.sid IN (SELECT sid FROM Sample WHERE age<40)
+   AND g2.sid IN (SELECT sid FROM Sample WHERE age>40)
+ GROUP BY g1.vid
+ HAVING SUM(g1.gt)>2 AND SUM(g2.gt)<1;
