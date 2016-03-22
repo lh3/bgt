@@ -131,3 +131,58 @@ int main_bcfidx(int argc, char *argv[])
 	bcf_index_build(argv[optind], min_shift);
 	return 0;
 }
+
+int main_atomize(int argc, char *argv[])
+{
+	int c, vcf_in = 0, bcf_out = 0, write_M = 0, id_GT = -1;
+	char moder[8], modew[8], *fn_ref = 0;
+	htsFile *in, *out;
+	bcf_atombuf_t *ab;
+	const bcf_atom_t *a;
+	bcf1_t *b;
+
+	while ((c = getopt(argc, argv, "bSMt:")) >= 0) {
+		if (c == 'S') vcf_in = 1;
+		else if (c == 't') vcf_in = 1, fn_ref = optarg;
+		else if (c == 'b') bcf_out = 1;
+		else if (c == 'M') write_M = 1;
+	}
+	if (optind == argc) {
+		fprintf(stderr, "Usage: bgt atomize [options] <in.bcf>|<in.vcf>\n");
+		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "  -b       BCF output\n");
+		fprintf(stderr, "  -S       VCF input\n");
+		fprintf(stderr, "  -t FILE  list of contig names and lengths (force -S)\n");
+		fprintf(stderr, "  -M       use <M> symbolic allele\n");
+		return 1;
+	}
+
+	strcpy(moder, "r");
+	if (vcf_in == 0) strcat(moder, "b");
+	in = hts_open(argv[optind], moder, fn_ref);
+	assert(in);
+	ab = bcf_atombuf_init(in, 0);
+
+	strcpy(modew, "w");
+	if (bcf_out) strcat(modew, "b");
+	out = hts_open("-", modew, 0);
+	vcf_hdr_write(out, ab->h);
+
+	id_GT = bcf_id2int(ab->h, BCF_DT_ID, "GT");
+	if (id_GT < 0) {
+		bcf_hdr_append(ab->h, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">");
+		id_GT = bcf_id2int(ab->h, BCF_DT_ID, "GT");
+	}
+
+	b = bcf_init1();
+	while ((a = bcf_atom_read(ab)) != 0) {
+		bcf_atom2bcf(a, b, write_M, id_GT);
+		vcf_write1(out, ab->h, b);
+	}
+	bcf_destroy1(b);
+
+	hts_close(out);
+	bcf_atombuf_destroy(ab);
+	hts_close(in);
+	return 0;
+}

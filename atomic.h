@@ -7,7 +7,7 @@ typedef struct {
 	kstring_t ref;
 	char *alt;
 	int rid, pos, rlen, n_gt;
-	uint32_t anum:30, has_multi:1, from_new:1;
+	uint32_t anum:29, has_multi:1, from_new:1, phased:1;
 	uint8_t *gt;
 } bcf_atom_t;
 

@@ -25,6 +25,7 @@ static int bcf_atom_gen_at(const bcf_hdr_t *h, bcf1_t *b, int n, bcf_atom_t *a)
 	assert(i < b->n_fmt);
 	gt = &b->d.fmt[i];
 	assert(gt->n == 2);
+	a->phased = gt->p[0]&1;
 
 	eq = (int*)alloca(n * sizeof(int));
 	ks_introsort(atom, n, a);
@@ -246,7 +247,8 @@ const bcf_atom_t *bcf_atom_read(bcf_atombuf_t *buf)
 
 void bcf_atom2bcf(const bcf_atom_t *a, bcf1_t *b, int write_M, int id_GT)
 {
-	static uint8_t conv[4] = { 1<<1|1, 2<<1|1, 0<<1|1, 3<<1|1 };
+	static uint8_t conv[4] = { 1<<1, 2<<1, 0<<1, 3<<1 };
+	static uint8_t conv_no_M[4] = { 1<<1, 2<<1, 0<<1, 1<<1 };
 	b->rid = a->rid, b->pos = a->pos, b->rlen = a->rlen;
 	b->qual = 0, b->n_info = b->n_fmt = b->n_sample = 0;
 	b->n_allele = write_M && a->has_multi? 3 : 2;
@@ -264,8 +266,13 @@ void bcf_atom2bcf(const bcf_atom_t *a, bcf1_t *b, int write_M, int id_GT)
 		bcf_enc_int1(&b->indiv, id_GT);
 		bcf_enc_size(&b->indiv, 2, BCF_BT_INT8);
 		ks_resize(&b->indiv, b->indiv.l + b->n_sample*2 + 1);
-		for (i = 0; i < b->n_sample<<1; ++i)
-			b->indiv.s[b->indiv.l++] = conv[a->gt[i]];
+		if (write_M) {
+			for (i = 0; i < b->n_sample<<1; ++i)
+				b->indiv.s[b->indiv.l++] = conv[a->gt[i]] | a->phased;
+		} else {
+			for (i = 0; i < b->n_sample<<1; ++i)
+				b->indiv.s[b->indiv.l++] = conv_no_M[a->gt[i]] | a->phased;
+		}
 		b->indiv.s[b->indiv.l] = 0;
 	}
 }
