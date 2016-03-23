@@ -134,18 +134,19 @@ int main_bcfidx(int argc, char *argv[])
 
 int main_atomize(int argc, char *argv[])
 {
-	int c, vcf_in = 0, bcf_out = 0, write_M = 0, id_GT = -1;
+	int c, vcf_in = 0, bcf_out = 0, write_M = 0, id_GT = -1, use_missing = 0;
 	char moder[8], modew[8], *fn_ref = 0;
 	htsFile *in, *out;
 	bcf_atombuf_t *ab;
 	const bcf_atom_t *a;
 	bcf1_t *b;
 
-	while ((c = getopt(argc, argv, "bSMt:")) >= 0) {
+	while ((c = getopt(argc, argv, "mbSMt:")) >= 0) {
 		if (c == 'S') vcf_in = 1;
 		else if (c == 't') vcf_in = 1, fn_ref = optarg;
 		else if (c == 'b') bcf_out = 1;
 		else if (c == 'M') write_M = 1;
+		else if (c == 'm') use_missing = 1;
 	}
 	if (optind == argc) {
 		fprintf(stderr, "Usage: bgt atomize [options] <in.bcf>|<in.vcf>\n");
@@ -153,7 +154,8 @@ int main_atomize(int argc, char *argv[])
 		fprintf(stderr, "  -b       BCF output\n");
 		fprintf(stderr, "  -S       VCF input\n");
 		fprintf(stderr, "  -t FILE  list of contig names and lengths (force -S)\n");
-		fprintf(stderr, "  -M       use <M> symbolic allele\n");
+		fprintf(stderr, "  -M       use <M> at a multi-allelic site (override -m)\n");
+		fprintf(stderr, "  -m       use . at a multi-allelic genotype\n");
 		return 1;
 	}
 
@@ -176,7 +178,7 @@ int main_atomize(int argc, char *argv[])
 
 	b = bcf_init1();
 	while ((a = bcf_atom_read(ab)) != 0) {
-		bcf_atom2bcf(a, b, write_M, id_GT);
+		bcf_atom2bcf2(a, b, write_M, id_GT, use_missing);
 		vcf_write1(out, ab->h, b);
 	}
 	bcf_destroy1(b);
