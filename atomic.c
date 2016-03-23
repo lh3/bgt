@@ -163,8 +163,9 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 						bcf_add_atom(a, b->rid, b->pos + x + j, 1, i, 1, &b->d.allele[0][x+j], 1, &b->d.allele[i][y+j]);
 				x += l, y += l;
 			} else if (*p == 'I') {
-				assert(x > 0 && y > 0);
-				bcf_add_atom(a, b->rid, b->pos + x - 1, 1, i, 1, &b->d.allele[0][x-1], l+1, &b->d.allele[i][y-1]);
+				if (x == 0 || y == 0)
+					fprintf(stderr, "[W::%s] invalid insertion (%d,%d) at %s:%d\n", __func__, x, y, h->id[BCF_DT_CTG][b->rid].key, b->pos + 1);
+				else bcf_add_atom(a, b->rid, b->pos + x - 1, 1, i, 1, &b->d.allele[0][x-1], l+1, &b->d.allele[i][y-1]);
 				y += l;
 			} else if (*p == 'D') {
 				assert(x > 0 && y > 0);
