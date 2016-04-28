@@ -285,4 +285,5 @@ void bcf_atom2bcf2(const bcf_atom_t *a, bcf1_t *b, int write_M, int id_GT, int u
 
 void bcf_atom2bcf(const bcf_atom_t *a, bcf1_t *b, int write_M, int id_GT)
 {
+	bcf_atom2bcf2(a, b, write_M, id_GT, 1);
 }

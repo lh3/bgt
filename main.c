@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#define BGT_VERSION "1.0-r282-dirty"
+#define BGT_VERSION "1.0-r283-dirty"
 
 int main_import(int argc, char *argv[]);
 int main_view(int argc, char *argv[]);
