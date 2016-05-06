@@ -232,13 +232,15 @@ const char *fms_read(fms_t *f, kexpr_t *ke, int name_only)
 int main_fmf(int argc, char *argv[])
 {
 	kexpr_t *ke = 0;
-	int i, c, err, in_mem = 0, name_only = 0;
-	while ((c = getopt(argc, argv, "mn")) >= 0)
+	int i, c, err, in_mem = 0, name_only = 0, list_only = 0;
+	while ((c = getopt(argc, argv, "lmn")) >= 0)
 		if (c == 'm') in_mem = 1;
 		else if (c == 'n') name_only = 1;
+		else if (c == 'l') { in_mem = 1; list_only = 1; }
 	if (argc == optind) {
-		fprintf(stderr, "Usage: fmf [-mn] <in.fmf> [condition]\n");
+		fprintf(stderr, "Usage: fmf [-lmn] <in.fmf> [condition]\n");
 		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "  -l   list metadata keys found in the FMF file\n");
 		fprintf(stderr, "  -m   load the entire FMF into RAM\n");
 		fprintf(stderr, "  -n   only output the row name (the 1st column)\n");
 		return 1;
@@ -247,14 +249,20 @@ int main_fmf(int argc, char *argv[])
 	if (in_mem) {
 		fmf_t *f;
 		f = fmf_read(argv[optind]);
-		for (i = 0; i < f->n_rows; ++i) {
-			char *s;
-			if (ke && !fmf_test(f, i, ke)) continue;
-			if (!name_only) {
-				s = fmf_write(f, i);
-				puts(s);
-				free(s);
-			} else puts(f->rows[i].name);
+		if (list_only) {
+			for (i = 0; i < f->n_keys; ++i)
+				puts(f->keys[i]);
+		}
+		else {
+			for (i = 0; i < f->n_rows; ++i) {
+				char *s;
+				if (ke && !fmf_test(f, i, ke)) continue;
+				if (!name_only) {
+					s = fmf_write(f, i);
+					puts(s);
+					free(s);
+				} else puts(f->rows[i].name);
+			}
 		}
 		fmf_destroy(f);
 	} else {
