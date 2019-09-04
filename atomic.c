@@ -109,10 +109,10 @@ void bcf_atomize(const bcf_hdr_t *h, bcf1_t *b, bcf_atom_v *a)
 		bcf_unpack(b, BCF_UN_INFO);
 		for (i = 0; i < b->n_info; ++i)
 			if (b->d.info[i].key == cid) break;
-		assert(i < b->n_info); // may happen if CIGAR is in FILTER or FORMAT only
-		assert(b->d.info[i].type == BCF_BT_CHAR);
-		p_cigar = (char*)b->d.info[i].vptr;
-		l_cigar = b->d.info[i].len;
+		if (i < b->n_info && b->d.info[i].type == BCF_BT_CHAR) { // CIGAR in INFO
+			p_cigar = (char*)b->d.info[i].vptr;
+			l_cigar = b->d.info[i].len;
+		}
 	} else bcf_unpack(b, BCF_UN_STR);
 	l_ref = strlen(b->d.allele[0]);
 
