@@ -92,4 +92,6 @@ chr1  18  C        CT,<M>  A2=chr1_14_7_A               GT:A2  2|1:3|1
 ```
 Here the `A2` INFO tag uses a succinct way to encode the list of overlapping
 alleles; the `A2` FORMAT tag indexes into the combine ALT and A2 array and
-gives the complete genotype. 
+gives the complete genotype. However, this extension leads to duplicated
+information which makes it more likely to introduce errors. We can't go far
+without breaking the compatibility with VCF.
